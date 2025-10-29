@@ -22,12 +22,12 @@
   "main": "server.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/khaledssbd/BasaFinder-a-rental-management-project-serverside.git"
+    "url": "git+https://github.com/sparktechagency/crecent-change-apis.git"
   },
   "bugs": {
-    "url": "https://github.com/khaledssbd/BasaFinder-a-rental-management-project-serverside/issues"
+    "url": "https://github.com/sparktechagency/crecent-change-apis/issues"
   },
-  "homepage": "https://github.com/khaledssbd/BasaFinder-a-rental-management-project-serverside#readme",
+  "homepage": "https://github.com/sparktechagency/crecent-change-apis#readme",
   "version": "1.0.0",
   "scripts": {
     "start": "node dist/server.js",
