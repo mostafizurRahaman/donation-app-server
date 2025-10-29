@@ -1,0 +1,59 @@
+import { IClient } from './client.interface';
+import { Schema, model } from 'mongoose';
+import { defaultUserImage } from '../Auth/auth.constant';
+
+const clientSchema = new Schema<IClient>(
+  {
+    auth: {
+      type: Schema.Types.ObjectId,
+      ref: 'Auth',
+      required: true,
+      unique: true,
+    },
+
+    fullName: {
+      type: String,
+      required: true,
+    },
+    address: {
+      type: String,
+      required: true,
+    },
+    state: {
+      type: String,
+      required: true,
+    },
+    postalCode: {
+      type: String,
+      required: true,
+    },
+
+    image: {
+      type: String,
+      default: defaultUserImage,
+    },
+
+    fullNameInCard: {
+      type: String,
+    },
+    cardNumber: {
+      type: String,
+    },
+    cardExpiryDate: {
+      type: Date,
+    },
+    cardCVC: {
+      type: String,
+    },
+
+    // phoneNumber: {
+    //   type: String,
+    //   unique: [true, 'This phone number is already used!'],
+    // },
+  },
+  { timestamps: true, versionKey: false }
+);
+
+const Client = model<IClient>('Client', clientSchema);
+
+export default Client;

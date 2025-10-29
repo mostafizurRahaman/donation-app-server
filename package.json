@@ -1,0 +1,75 @@
+{
+  "name": "crescent_change",
+  "author": {
+    "name": "Khaled Siddique",
+    "email": "khaledssbd@gmail.com",
+    "url": "https://khaled-siddique.vercel.app"
+  },
+  "description": "A fast and lightweight donation based point earning and e-commerce discount based platform built with MongoDB, NodeJS, ExpressJS and Flutter.",
+  "keywords": [
+    "business",
+    "crescent",
+    "donation",
+    "e-commerce",
+    "organization",
+    "typescript",
+    "mongoose",
+    "nodejs",
+    "expressjs",
+    "mongodb"
+  ],
+  "license": "ISC",
+  "main": "server.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khaledssbd/BasaFinder-a-rental-management-project-serverside.git"
+  },
+  "bugs": {
+    "url": "https://github.com/khaledssbd/BasaFinder-a-rental-management-project-serverside/issues"
+  },
+  "homepage": "https://github.com/khaledssbd/BasaFinder-a-rental-management-project-serverside#readme",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only --poll src/server.ts",
+    "build": "tsc",
+    "generate": "node generate",
+    "create-module": "npx ts-node src/scripts/createModule.ts",
+    "deploy": "yarn build && vercel && vercel --prod"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "http-status": "^2.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "libphonenumber-js": "^1.12.25",
+    "mongoose": "^8.19.2",
+    "multer": "2.0.2",
+    "nodemailer": "^7.0.10",
+    "otp-generator": "^4.0.1",
+    "stripe": "^19.1.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.38.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/morgan": "^1.9.10",
+    "@types/multer": "^2.0.0",
+    "@types/nodemailer": "^7.0.3",
+    "@types/otp-generator": "^4.0.2",
+    "eslint": "^9.38.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.4.0",
+    "morgan": "^1.10.1",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2"
+  }
+}
