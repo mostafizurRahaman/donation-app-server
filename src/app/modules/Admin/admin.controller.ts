@@ -1,6 +1,6 @@
 // import httpStatus from 'http-status';
 // import { asyncHandler } from '../../utils';
-// import sendResponse from '../../utils/sendResponse';
+// import {sendResponse} from '../../utils';
 // import { AdminService } from './admin.service';
 
 // // verifyArtistByAdmin

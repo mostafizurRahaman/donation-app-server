@@ -9,7 +9,7 @@ export interface IBusiness extends Document {
   tagLine: string;
   description: string;
 
-  logo: string;
+  coverImage: string;
 
   businessPhoneNumber: string;
   businessEmail: string;

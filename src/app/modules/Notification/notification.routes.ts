@@ -7,19 +7,19 @@ const router = Router();
 
 router.get(
   '/me',
-  auth(ROLE.ARTIST, ROLE.CLIENT),
+  auth(ROLE.CLIENT, ROLE.BUSINESS, ROLE.ORGANIZATION, ROLE.ADMIN),
   notificationController.getNotifications
 );
 
 router.patch(
   '/mark-notification',
-  auth(ROLE.ARTIST, ROLE.CLIENT),
+  auth(ROLE.CLIENT, ROLE.BUSINESS, ROLE.ORGANIZATION, ROLE.ADMIN),
   notificationController.markAsSeen
 );
 
 router.get(
   '/unseen-notification-count/:id',
-  auth(ROLE.ARTIST, ROLE.CLIENT),
+  auth(ROLE.CLIENT, ROLE.BUSINESS, ROLE.ORGANIZATION, ROLE.ADMIN),
   notificationController.getUnseenNotificationCount
 );
 

@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import { asyncHandler } from '../../utils';
 import { BusinessService } from './organization.service';
-import sendResponse from '../../utils/sendResponse';
+import { sendResponse } from '../../utils';
 
 const updateBusinessProfile = asyncHandler(async (req, res) => {
   const result = await BusinessService.updateBusinessProfile(

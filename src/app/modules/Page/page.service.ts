@@ -1,5 +1,5 @@
-import { TContentPayload } from './content.interface';
-import { Content } from './content.model';
+import { TContentPayload } from './page.interface';
+import { Content } from './page.model';
 
 const createOrUpdatePage = async (payload: TContentPayload) => {
   const page = await Content.findOneAndUpdate({ type: payload.type }, payload, {

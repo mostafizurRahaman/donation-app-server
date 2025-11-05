@@ -12,16 +12,16 @@ export interface IORGANIZATION extends Document {
   website: string;
 
   phoneNumber: string;
+  coverImage: string;
 
-  boardMemberFullName: string;
+  boardMemberName: string;
   boardMemberEmail: string;
   boardMemberPhoneNumber: string;
 
-  fullNameInCard: string;
+  nameInCard: string;
   cardNumber: string;
   cardExpiryDate: Date;
   cardCVC: string;
-
 
   tfnOrAbnNumber: string;
   zakatLicenseHolderNumber: string | null;

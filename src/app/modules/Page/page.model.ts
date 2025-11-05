@@ -1,6 +1,6 @@
-import { model, Schema } from "mongoose";
-import { IContent } from "./content.interface";
-import { CONTENT } from "./content.constant";
+import { model, Schema } from 'mongoose';
+import { IContent } from './page.interface';
+import { CONTENT } from './page.constant';
 
 const contentSchema = new Schema<IContent>(
   {
@@ -15,10 +15,10 @@ const contentSchema = new Schema<IContent>(
     },
     content: {
       type: String,
-      required: true, 
+      required: true,
     },
   },
   { timestamps: true, versionKey: false }
 );
 
-export const Content = model<IContent>("Content", contentSchema);
+export const Content = model<IContent>('Content', contentSchema);

@@ -32,10 +32,7 @@ const notificationSchema = new Schema<INotification>(
     },
   },
 
-  {
-    timestamps: true,
-    versionKey: false,
-  }
+  { timestamps: true, versionKey: false }
 );
 
 const Notification = model<INotification>('Notification', notificationSchema);

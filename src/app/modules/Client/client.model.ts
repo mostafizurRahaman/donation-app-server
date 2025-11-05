@@ -11,7 +11,7 @@ const clientSchema = new Schema<IClient>(
       unique: true,
     },
 
-    fullName: {
+    name: {
       type: String,
       required: true,
     },
@@ -33,7 +33,7 @@ const clientSchema = new Schema<IClient>(
       default: defaultUserImage,
     },
 
-    fullNameInCard: {
+    nameInCard: {
       type: String,
     },
     cardNumber: {

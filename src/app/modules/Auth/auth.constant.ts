@@ -1,3 +1,5 @@
+import config from '../../config';
+
 export const ROLE = {
   CLIENT: 'CLIENT',
   ORGANIZATION: 'ORGANIZATION',
@@ -9,5 +11,7 @@ export type TRole = keyof typeof ROLE;
 
 export type ValueOf<T> = T[keyof T];
 
-export const defaultUserImage: string =
-  'https://res.cloudinary.com/dweesppci/image/upload/v1746204369/wtmpcphfvexcq2ubcss0.png';
+// Generate enum values dynamically from ROLE
+export const roleValues = Object.values(ROLE) as [string, ...string[]];
+
+export const defaultUserImage: string = config.default_user_image as string;

@@ -6,6 +6,7 @@ import globalErrorHandler from './globalErrorHandler';
 import notFoundHandler from './notFound';
 import sendContactUsEmail from './sendContactUsEmail';
 import sendOtpEmail from './sendOtpEmail';
+import sendResponse from './sendResponse';
 
 // JWT configuration
 const options = {
@@ -24,5 +25,6 @@ export {
   sendOtpEmail,
   deleteFile,
   sendContactUsEmail,
+  sendResponse,
   // Logger
 };

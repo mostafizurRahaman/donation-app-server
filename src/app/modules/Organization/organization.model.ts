@@ -32,8 +32,11 @@ const organizationSchema = new Schema<IORGANIZATION>(
     phoneNumber: {
       type: String,
     },
+    coverImage: {
+      type: String,
+    },
 
-    boardMemberFullName: {
+    boardMemberName: {
       type: String,
     },
     boardMemberEmail: {

@@ -2,7 +2,7 @@ import { Document, Model, ObjectId } from 'mongoose';
 import { TRole } from './auth.constant';
 
 // Instance methods
-export interface IAuth extends Document {
+export interface IAuth extends Document { // extends Document for using .save() method
   _id: ObjectId;
 
   email: string;
@@ -18,6 +18,9 @@ export interface IAuth extends Document {
   role: TRole;
   isActive: boolean;
   isDeleted: boolean;
+
+  deactivationReason: string;
+  deactivatedAt: Date;
 
   createdAt: Date;
   updatedAt: Date;

@@ -5,13 +5,23 @@ dotenv.config({ path: path.join((process.cwd(), '.env')) });
 
 export default {
   NODE_ENV: process.env.NODE_ENV,
+  client_url: process.env.CLIENT_URL,
+  contact_us_email: process.env.CONTACT_US_EMAIL,
+
   host: process.env.HOST,
   port: process.env.PORT,
+
   db_url: process.env.DB_URL,
+
+  preffered_website_name: process.env.PREFFERED_WEBSITE_NAME,
+  emailColor: process.env.EMAILCOLOR,
+  buttonColor: process.env.BUTTONCOLOR,
+
   bcrypt_salt_rounds: process.env.BCRYPT_SALT_ROUNDS,
   otp_expiry_minutes: process.env.OTP_EXPIRY_MINUTES,
-  admin_commision: process.env.ADMIN_COMMISION,
-  boost_charge: process.env.BOOST_CHARGE,
+
+  default_user_image: process.env.DEFAULT_USER_IMAGE,
+
   jwt: {
     access_secret: process.env.JWT_ACCESS_SECRET,
     access_expires_in: process.env.JWT_ACCESS_EXPIRES_IN,
@@ -25,9 +35,6 @@ export default {
   cloudinary_api_key: process.env.CLOUDINARY_API_KEY,
   cloudinary_api_secret: process.env.CLOUDINARY_API_SECRET,
 
-  client_url: process.env.CLIENT_URL,
-  contact_us_email: process.env.CONTACT_US_EMAIL,
-
   nodemailer: {
     email: process.env.EMAIL_FOR_NODEMAILER,
     password: process.env.PASSWORD_FOR_NODEMAILER,
@@ -36,6 +43,7 @@ export default {
   admin: {
     email: process.env.ADMIN_EMAIL,
     password: process.env.ADMIN_PASSWORD,
+    otp: process.env.ADMIN_OTP,
   },
 
   stripe: {

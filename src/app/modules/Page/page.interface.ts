@@ -1,4 +1,4 @@
-import { TContent } from "./content.constant";
+import { TContent } from './page.constant';
 
 export interface IContent extends Document {
   type: TContent;

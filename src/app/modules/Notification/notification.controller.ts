@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
 import httpStatus from 'http-status';
+import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils';
-import sendResponse from '../../utils/sendResponse';
+import { sendResponse } from '../../utils';
 import { notificationService } from './notification.service';
 
 const getNotifications = asyncHandler(async (req: Request, res: Response) => {

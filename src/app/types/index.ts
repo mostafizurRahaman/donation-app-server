@@ -10,26 +10,14 @@ export interface IMeta {
   totalPage: number;
 }
 
-// export type TProfileFileFields = {
-//   idFrontPart?: Express.Multer.File[];
-//   idBackPart?: Express.Multer.File[];
-//   selfieWithId?: Express.Multer.File[];
-//   registrationCertificate?: Express.Multer.File[];
-//   taxIdOrEquivalent?: Express.Multer.File[];
-//   studioLicense?: Express.Multer.File[];
-// };
-
-export type TSocialLoginPayload = {
-  email: string;
-  fcmToken: string;
-  image?: string;
-  fullName?: string;
-  phoneNumber?: string;
-  address?: string;
+export type TProfileFileFields = {
+  clientImage?: Express.Multer.File[];
+  businessImage?: Express.Multer.File[];
+  organizationImage?: Express.Multer.File[];
 };
 
 export type TDeactiveAccountPayload = {
   email: string;
   password: string;
   deactivationReason: string;
-}
+};

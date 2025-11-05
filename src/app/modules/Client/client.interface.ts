@@ -2,17 +2,18 @@ import { Document } from 'mongoose';
 import { Types } from 'mongoose';
 
 export interface IClient extends Document {
+  _id: Types.ObjectId;
   auth: Types.ObjectId;
 
   // _id: Types.ObjectId;
-  fullName: string;
+  name: string;
   address: string;
   state: string;
   postalCode: string;
 
   image: string;
 
-  fullNameInCard: string;
+  nameInCard: string;
   cardNumber: string;
   cardExpiryDate: Date;
   cardCVC: string;

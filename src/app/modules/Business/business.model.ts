@@ -23,7 +23,7 @@ const businessSchema = new Schema<IBusiness>(
       type: String,
     },
 
-    logo: {
+    coverImage: {
       type: String,
     },
 

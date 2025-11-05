@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import { asyncHandler } from '../../utils';
-import sendResponse from '../../utils/sendResponse';
-import { ContentService } from './content.service';
+import { sendResponse } from '../../utils';
+import { ContentService } from './page.service';
 
 const createContentOrUpdate = asyncHandler(async (req, res) => {
   const result = await ContentService.createOrUpdatePage(req.body);

@@ -3,6 +3,8 @@ import { model, Schema } from 'mongoose';
 import config from '../../config';
 import { ROLE } from './auth.constant';
 import { IAuth, IAuthModel } from './auth.interface';
+import { AppError } from '../../utils';
+import httpStatus from 'http-status';
 
 const authSchema = new Schema<IAuth, IAuthModel>(
   {
@@ -47,21 +49,59 @@ const authSchema = new Schema<IAuth, IAuthModel>(
       type: Boolean,
       default: false,
     },
+
+    deactivationReason: {
+      type: String,
+    },
+    deactivatedAt: {
+      type: Date,
+    },
   },
   { timestamps: true, versionKey: false }
 );
 
 // Custom hooks/methods
-authSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
 
-  this.password = await bcrypt.hash(
-    this.password,
-    Number(config.bcrypt_salt_rounds)
-  );
+// Hash password before saving
+authSchema.pre('save', async function (next) {
+  if (this.isNew || this.isModified('password')) {
+    if (!this.password) {
+      return next(
+        new AppError(httpStatus.BAD_REQUEST, 'Password is required!')
+      );
+    }
+
+    this.password = await bcrypt.hash(
+      this.password,
+      Number(config.bcrypt_salt_rounds)
+    );
+  }
   next();
 });
 
+// Clear password after saving
+authSchema.post('save', function (doc, next) {
+  if (doc) {
+    doc.password = '';
+  }
+  next();
+});
+
+authSchema.post('find', function (doc, next) {
+  if (doc) {
+    doc.password = '';
+  }
+  next();
+});
+
+authSchema.post('findOne', function (doc, next) {
+  if (doc) {
+    doc.password = '';
+  }
+  next();
+});
+
+// Remove deleted documents from find queries
 authSchema.pre('find', function (next) {
   this.find({ isDeleted: { $ne: true } });
   next();
@@ -74,11 +114,6 @@ authSchema.pre('findOne', function (next) {
 
 authSchema.pre('aggregate', function (next) {
   this.pipeline().unshift({ $match: { isDeleted: { $ne: true } } });
-  next();
-});
-
-authSchema.post('save', function (doc, next) {
-  doc.password = '';
   next();
 });
 

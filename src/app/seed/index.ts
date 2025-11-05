@@ -3,11 +3,11 @@ import config from '../config';
 import { ROLE } from '../modules/Auth/auth.constant';
 import Auth from '../modules/Auth/auth.model';
 
-const adminUser = {
+const adminData = {
   role: ROLE.ADMIN,
   email: config.admin.email,
   password: config.admin.password,
-  otp: '654321',
+  otp: config.admin.otp,
   otpExpiry: new Date(),
   isVerifiedByOTP: true,
 };
@@ -15,20 +15,20 @@ const adminUser = {
 const seedAdmin = async () => {
   try {
     // Check if an admin already exists
-    const isAdminExist = await Auth.findOne({
+    const admin = await Auth.findOne({
       role: ROLE.ADMIN,
       email: config.admin.email,
     });
 
-    if (!isAdminExist) {
-      await Auth.create(adminUser);
+    if (!admin) {
+      await Auth.create(adminData);
 
-      console.log('Admin created successfully!');
+      console.log('🎉✅ Admin seeded successfully!');
     } else {
-      console.log('Admin already exists!');
+      console.log('🟡⚠️ Admin already exists!');
     }
   } catch (error) {
-    console.error('Error seeding admin:', error);
+    console.log('🔴❌ Error seeding Admin', error);
   }
 };
 
