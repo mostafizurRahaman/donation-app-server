@@ -1,21 +1,23 @@
 import httpStatus from 'http-status';
-import { Types } from 'mongoose';
+import { Types, FilterQuery } from 'mongoose';
 import { AppError } from '../../utils';
 import DonationReceipt from './donationReceipt.model';
-import { 
-  IReceiptGenerationPayload, 
+import {
+  IReceiptGenerationPayload,
   IReceiptEmailPayload,
-  IDonationReceipt 
+  IDonationReceipt,
 } from './donationReceipt.interface';
 import { generateReceiptPDF } from './donationReceipt.utils';
 import { sendReceiptEmail } from '../../utils/emailService';
 
 // Generate donation receipt
-const generateReceipt = async (payload: IReceiptGenerationPayload): Promise<IDonationReceipt> => {
+const generateReceipt = async (
+  payload: IReceiptGenerationPayload
+): Promise<IDonationReceipt> => {
   try {
     // Check if receipt already exists for this donation
     const existingReceipt = await DonationReceipt.findOne({
-      donationId: new Types.ObjectId(payload.donationId)
+      donationId: new Types.ObjectId(payload.donationId),
     });
 
     if (existingReceipt) {
@@ -56,16 +58,20 @@ const generateReceipt = async (payload: IReceiptGenerationPayload): Promise<IDon
   } catch (error) {
     throw new AppError(
       httpStatus.INTERNAL_SERVER_ERROR,
-      `Failed to generate receipt: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to generate receipt: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
     );
   }
 };
 
 // Send receipt email
-const sendReceiptEmailService = async (payload: IReceiptEmailPayload): Promise<void> => {
+const sendReceiptEmailService = async (
+  payload: IReceiptEmailPayload
+): Promise<void> => {
   try {
     const receipt = await DonationReceipt.findById(payload.receiptId);
-    
+
     if (!receipt) {
       throw new AppError(httpStatus.NOT_FOUND, 'Receipt not found');
     }
@@ -81,17 +87,16 @@ const sendReceiptEmailService = async (payload: IReceiptEmailPayload): Promise<v
     });
 
     // Update receipt record
-    await DonationReceipt.findByIdAndUpdate(
-      payload.receiptId,
-      {
-        isEmailSent: true,
-        emailSentAt: new Date(),
-      }
-    );
+    await DonationReceipt.findByIdAndUpdate(payload.receiptId, {
+      isEmailSent: true,
+      emailSentAt: new Date(),
+    });
   } catch (error) {
     throw new AppError(
       httpStatus.INTERNAL_SERVER_ERROR,
-      `Failed to send receipt email: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to send receipt email: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
     );
   }
 };
@@ -115,12 +120,17 @@ const getReceiptsByDonor = async (
   const skip = (page - 1) * limit;
 
   // Build filter
-  const filter: any = { donorId: new Types.ObjectId(donorId) };
-  
+  const filter: FilterQuery<
+    Pick<IDonationReceipt, 'donorId' | 'donationDate'>
+  > = {
+    donorId: new Types.ObjectId(donorId),
+  };
+
   if (startDate || endDate) {
-    filter.donationDate = {};
-    if (startDate) filter.donationDate.$gte = startDate;
-    if (endDate) filter.donationDate.$lte = endDate;
+    const dateCondition: { $gte?: Date; $lte?: Date } = {};
+    if (startDate) dateCondition.$gte = startDate;
+    if (endDate) dateCondition.$lte = endDate;
+    filter.donationDate = dateCondition;
   }
 
   const [receipts, totalCount] = await Promise.all([
@@ -134,7 +144,7 @@ const getReceiptsByDonor = async (
   ]);
 
   return {
-    receipts: receipts as IDonationReceipt[],
+    receipts: receipts as unknown as IDonationReceipt[],
     totalCount,
     totalPages: Math.ceil(totalCount / limit),
     currentPage: page,
@@ -160,12 +170,15 @@ const getReceiptsByOrganization = async (
   const skip = (page - 1) * limit;
 
   // Build filter
-  const filter: any = { organizationId: new Types.ObjectId(organizationId) };
-  
+  const filter: FilterQuery<IDonationReceipt> = {
+    organizationId: new Types.ObjectId(organizationId),
+  };
+
   if (startDate || endDate) {
-    filter.donationDate = {};
-    if (startDate) filter.donationDate.$gte = startDate;
-    if (endDate) filter.donationDate.$lte = endDate;
+    const dateCondition: { $gte?: Date; $lte?: Date } = {};
+    if (startDate) dateCondition.$gte = startDate;
+    if (endDate) dateCondition.$lte = endDate;
+    filter.donationDate = dateCondition;
   }
 
   const [receipts, totalCount] = await Promise.all([
@@ -179,7 +192,7 @@ const getReceiptsByOrganization = async (
   ]);
 
   return {
-    receipts: receipts as IDonationReceipt[],
+    receipts: receipts as unknown as IDonationReceipt[],
     totalCount,
     totalPages: Math.ceil(totalCount / limit),
     currentPage: page,
@@ -214,16 +227,18 @@ const adminGetAllReceipts = async (options: {
   totalPages: number;
   currentPage: number;
 }> => {
-  const { page, limit, startDate, endDate, organizationId, donorId, search } = options;
+  const { page, limit, startDate, endDate, organizationId, donorId, search } =
+    options;
   const skip = (page - 1) * limit;
 
   // Build filter
-  const filter: any = {};
-  
+  const filter: FilterQuery<IDonationReceipt> = {};
+
   if (startDate || endDate) {
-    filter.donationDate = {};
-    if (startDate) filter.donationDate.$gte = startDate;
-    if (endDate) filter.donationDate.$lte = endDate;
+    const dateCondition: { $gte?: Date; $lte?: Date } = {};
+    if (startDate) dateCondition.$gte = startDate;
+    if (endDate) dateCondition.$lte = endDate;
+    filter.donationDate = dateCondition;
   }
 
   if (organizationId) {
@@ -239,7 +254,7 @@ const adminGetAllReceipts = async (options: {
       { receiptNumber: { $regex: search, $options: 'i' } },
       { donorName: { $regex: search, $options: 'i' } },
       { organizationName: { $regex: search, $options: 'i' } },
-    ];
+    ] as unknown as FilterQuery<IDonationReceipt>[];
   }
 
   const [receipts, totalCount] = await Promise.all([
@@ -254,7 +269,7 @@ const adminGetAllReceipts = async (options: {
   ]);
 
   return {
-    receipts: receipts as IDonationReceipt[],
+    receipts: receipts as unknown as IDonationReceipt[],
     totalCount,
     totalPages: Math.ceil(totalCount / limit),
     currentPage: page,

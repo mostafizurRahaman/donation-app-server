@@ -77,8 +77,8 @@ const donationReceiptSchema = new Schema<
   }
 );
 
-// Generate unique receipt number before saving
-donationReceiptSchema.pre('save', async function (next) {
+// Generate unique receipt number before validation
+donationReceiptSchema.pre('validate', async function (next) {
   if (this.isNew && !this.receiptNumber) {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');

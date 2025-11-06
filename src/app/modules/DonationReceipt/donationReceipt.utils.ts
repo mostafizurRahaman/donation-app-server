@@ -31,8 +31,8 @@ export const generateReceiptPDF = async (data: IReceiptPDFData): Promise<string>
     // Save HTML file (in production, this would be a PDF)
     await fs.writeFile(filePath, receiptHTML);
     
-    // Return public URL
-    return `/receipts/${filename}`;
+    // Return public URL (served via app.use('/public', express.static('public')))
+    return `/public/receipts/${filename}`;
   } catch (error) {
     throw new Error(`Failed to generate receipt PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
