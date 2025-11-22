@@ -439,7 +439,7 @@ const getAllOrganizations = async (query: Record<string, unknown>) => {
  * Get Organization Details by ID
  */
 const getOrganizationDetailsById = async (organizationId: string) => {
-  // Find organization by ID
+  // Find organization by ID (organizationId is Profile._id, this is internal Org API)
   const organization = await Organization.findById(organizationId)
     .select(
       'name registeredCharityName logoImage coverImage aboutUs serviceType address state postalCode website phoneNumber'

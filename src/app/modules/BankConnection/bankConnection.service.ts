@@ -19,6 +19,7 @@ import {
   IPlaidTransaction,
   ISyncResponse,
 } from './bankConnection.interface';
+import { RoundUpTransactionModel } from '../RoundUpTransaction/roundUpTransaction.model';
 import plaidClient, { encryptData, decryptData } from '../../config/plaid';
 
 // Initialize Plaid client
@@ -285,10 +286,7 @@ async function getStoredTransactions(
       throw new Error('Bank connection not found');
     }
 
-    // Import RoundUpTransaction model
-    const { RoundUpTransactionModel } = await import(
-      '../RoundUpTransaction/roundUpTransaction.model'
-    );
+    
 
     // Build query
     const query: any = {

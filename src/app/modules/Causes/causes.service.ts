@@ -13,6 +13,7 @@ import {
 import Organization from '../Organization/organization.model';
 import { CAUSE_CATEGORY_TYPE } from './causes.constant';
 import Donation from '../Donation/donation.model';
+import Auth from '../Auth/auth.model';
 
 const parseMonthInput = (month: string, boundary: 'start' | 'end') => {
   const [yearStr, monthStr] = month.split('-');
@@ -74,10 +75,16 @@ const getRaisedCausesByOrganizationFromDB = async (
   raisedCauses: IRaisedCauseSummary[];
   meta: { page: number; limit: number; total: number; totalPage: number };
 }> => {
-  // Validate organization
-  const organization = await Organization.findById(organizationId);
-  if (!organization) {
+  // Validate organization (organizationId is now Auth._id)
+  const organizationAuth = await Auth.findById(organizationId);
+  if (!organizationAuth || organizationAuth.role !== 'ORGANIZATION') {
     throw new AppError(httpStatus.NOT_FOUND, 'Organization not found!');
+  }
+
+  // Get organization profile when needed
+  const organization = await Organization.findOne({ auth: organizationId });
+  if (!organization) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Organization profile not found!');
   }
 
   const startDate = parseMonthInput(startMonth, 'start');
@@ -187,14 +194,21 @@ const createCauseIntoDB = async (payload: {
   try {
     session.startTransaction();
 
-    // Verify organization exists
-    const organization = await Organization.findById(
-      payload.organization
-    ).session(session);
-
-    if (!organization) {
+    // Verify organization exists (payload.organization is now Auth._id)
+    const organizationAuth = await Auth.findById(payload.organization).session(session);
+    if (!organizationAuth || organizationAuth.role !== 'ORGANIZATION') {
       throw new AppError(httpStatus.NOT_FOUND, 'Organization not found!');
     }
+
+    // Get organization profile
+    const organization = await Organization.findOne(
+      { auth: payload.organization }
+    ).session(session);
+    if (!organization) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Organization profile not found!');
+    }
+
+    
 
     // Create cause
     const [cause] = await Cause.create([payload], { session });
@@ -397,7 +411,7 @@ const updateCauseIntoDB = async (
   const cause = await Cause.findByIdAndUpdate(causeId, payload, {
     new: true,
     runValidators: true,
-  }).populate('organization', 'name serviceType coverImage');
+  }).populate('organization', '_id email role');
 
   if (!cause) {
     throw new AppError(httpStatus.NOT_FOUND, 'Cause not found!');
@@ -455,7 +469,7 @@ const updateCauseStatusIntoDB = async (
     causeId,
     { status },
     { new: true, runValidators: true }
-  ).populate('organization', 'name serviceType coverImage');
+  ).populate('organization', '_id email role');
 
   if (!cause) {
     throw new AppError(httpStatus.NOT_FOUND, 'Cause not found!');

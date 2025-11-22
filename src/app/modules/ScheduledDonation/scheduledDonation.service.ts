@@ -7,7 +7,7 @@ import {
   TUpdateScheduledDonation,
 } from './scheduledDonation.validation';
 import { AppError } from '../../utils';
-import Client from '../Client/client.model';
+import Auth from '../Auth/auth.model';
 import Organization from '../Organization/organization.model';
 import Cause from '../Causes/causes.model';
 import { CAUSE_STATUS_TYPE } from '../Causes/causes.constant';
@@ -84,15 +84,15 @@ const createScheduledDonation = async (
     paymentMethodId,
   } = payload;
 
-  // Validate user exists
-  const user = await Client.findOne({ auth: userId });
-  if (!user) {
+  // Validate user exists (userId is Auth._id)
+  const userAuth = await Auth.findById(userId);
+  if (!userAuth) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
   }
 
-  // Validate organization exists
-  const organization = await Organization.findById(organizationId);
-  if (!organization) {
+  // Validate organization exists (organizationId is Auth._id)
+  const organizationAuth = await Auth.findById(organizationId);
+  if (!organizationAuth || organizationAuth.role !== 'ORGANIZATION') {
     throw new AppError(httpStatus.NOT_FOUND, 'Organization not found!');
   }
 
@@ -133,7 +133,7 @@ const createScheduledDonation = async (
 
   // Create scheduled donation
   const scheduledDonation = await ScheduledDonation.create({
-    user: user._id,
+    user: userId,
     organization: new Types.ObjectId(organizationId),
     cause: new Types.ObjectId(causeId),
     amount,
@@ -166,13 +166,14 @@ const getUserScheduledDonations = async (
   };
 }> => {
   // Validate user exists
-  const user = await Client.findOne({ auth: userId });
-  if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
-  }
+  // userId is already Auth._id, no need to look up Client
+  // const user = await Client.findOne({ auth: userId });
+  // if (!user) {
+  //   throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
+  // }
 
   // Build base query with user filter (always required)
-  const baseQuery: Record<string, unknown> = { user: user._id };
+  const baseQuery: Record<string, unknown> = { user: userId };
 
   // Add isActive filter if specified
   if (query.isActive && query.isActive !== 'all') {
@@ -195,7 +196,7 @@ const getUserScheduledDonations = async (
   // Use QueryBuilder for search, filter, sort, pagination, and field selection
   const scheduledDonationQuery = new QueryBuilder(
     ScheduledDonation.find(baseQuery)
-      .populate('organization', 'name email logo')
+      .populate('organization', '_id email role')
       .populate('cause', 'name description icon'),
     queryBuilderQuery
   )
@@ -220,17 +221,18 @@ const getScheduledDonationById = async (
   scheduledDonationId: string
 ): Promise<IScheduledDonationModel> => {
   // Validate user exists
-  const user = await Client.findOne({ auth: userId });
-  if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
-  }
+  // userId is already Auth._id, no need to look up Client
+  // const user = await Client.findOne({ auth: userId });
+  // if (!user) {
+  //   throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
+  // }
 
   // Find scheduled donation
   const scheduledDonation = await ScheduledDonation.findOne({
     _id: scheduledDonationId,
-    user: user._id,
+    user: userId,
   })
-    .populate('organization', 'name email logo')
+    .populate('organization', '_id email role')
     .populate('cause', 'name description icon');
 
   if (!scheduledDonation) {
@@ -247,15 +249,16 @@ const updateScheduledDonation = async (
   payload: TUpdateScheduledDonation
 ): Promise<IScheduledDonationModel> => {
   // Validate user exists
-  const user = await Client.findOne({ auth: userId });
-  if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
-  }
+  // userId is already Auth._id, no need to look up Client
+  // const user = await Client.findOne({ auth: userId });
+  // if (!user) {
+  //   throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
+  // }
 
   // Find scheduled donation
   const scheduledDonation = await ScheduledDonation.findOne({
     _id: scheduledDonationId,
-    user: user._id,
+    user: userId,
   });
 
   if (!scheduledDonation) {
@@ -304,10 +307,11 @@ const pauseScheduledDonation = async (
   scheduledDonationId: string
 ): Promise<IScheduledDonationModel> => {
   // Validate user exists
-  const user = await Client.findOne({ auth: userId });
-  if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
-  }
+  // userId is already Auth._id, no need to look up Client
+  // const user = await Client.findOne({ auth: userId });
+  // if (!user) {
+  //   throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
+  // }
 
   // Find and update
   const scheduledDonation = await ScheduledDonation.findOneAndUpdate(
@@ -315,7 +319,7 @@ const pauseScheduledDonation = async (
     { isActive: false },
     { new: true }
   )
-    .populate('organization', 'name email logo')
+    .populate('organization', '_id email role')
     .populate('cause', 'name description icon');
 
   if (!scheduledDonation) {
@@ -331,15 +335,16 @@ const resumeScheduledDonation = async (
   scheduledDonationId: string
 ): Promise<IScheduledDonationModel> => {
   // Validate user exists
-  const user = await Client.findOne({ auth: userId });
-  if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
-  }
+  // userId is already Auth._id, no need to look up Client
+  // const user = await Client.findOne({ auth: userId });
+  // if (!user) {
+  //   throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
+  // }
 
   // Find scheduled donation
   const scheduledDonation = await ScheduledDonation.findOne({
     _id: scheduledDonationId,
-    user: user._id,
+    user: userId,
   });
 
   if (!scheduledDonation) {
@@ -358,7 +363,7 @@ const resumeScheduledDonation = async (
 
   await scheduledDonation.save();
 
-  await scheduledDonation.populate('organization', 'name email logo');
+  await scheduledDonation.populate('organization', '_id email role');
   await scheduledDonation.populate('cause', 'name description');
 
   return scheduledDonation;
@@ -370,15 +375,16 @@ const cancelScheduledDonation = async (
   scheduledDonationId: string
 ): Promise<void> => {
   // Validate user exists
-  const user = await Client.findOne({ auth: userId });
-  if (!user) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
-  }
+  // userId is already Auth._id, no need to look up Client
+  // const user = await Client.findOne({ auth: userId });
+  // if (!user) {
+  //   throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
+  // }
 
   // Find and delete
   const result = await ScheduledDonation.findOneAndDelete({
     _id: scheduledDonationId,
-    user: user._id,
+    user: userId,
   });
 
   if (!result) {
@@ -396,8 +402,8 @@ const getScheduledDonationsDueForExecution = async (): Promise<
     isActive: true,
     nextDonationDate: { $lte: now },
   })
-    .populate('user')
-    .populate('organization')
+    .populate('user', '_id email role')
+    .populate('organization', '_id email role')
     .populate('cause');
 
   const dateMaps = scheduledDonations.map((item) => item.nextDonationDate);
@@ -418,8 +424,8 @@ const executeScheduledDonation = async (
   const scheduledDonation = await ScheduledDonation.findById(
     scheduledDonationId
   )
-    .populate('user')
-    .populate('organization')
+    .populate('user', '_id email role')
+    .populate('organization', '_id email role')
     .populate('cause')
     .populate('paymentMethod'); // ✅ Populate payment method
 

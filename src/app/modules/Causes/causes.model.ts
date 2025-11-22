@@ -32,7 +32,7 @@ const causeSchema = new Schema<ICause>(
     },
     organization: {
       type: Schema.Types.ObjectId,
-      ref: 'Organization',
+      ref: 'Auth',
       required: [true, 'Organization is required!'],
     },
   },

@@ -10,12 +10,12 @@ const donationSchema = new Schema<IDonationModel>(
   {
     donor: {
       type: Schema.Types.ObjectId,
-      ref: 'Client',
+      ref: 'Auth',
       required: true,
     },
     organization: {
       type: Schema.Types.ObjectId,
-      ref: 'Organization',
+      ref: 'Auth',
       required: true,
     },
     cause: {

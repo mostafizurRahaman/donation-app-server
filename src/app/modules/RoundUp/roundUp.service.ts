@@ -14,7 +14,7 @@ import { AppError } from '../../utils';
 import httpStatus from 'http-status';
 import Auth from '../Auth/auth.model';
 import PaymentMethod from '../PaymentMethod/paymentMethod.model';
-import Client from '../Client/client.model';
+// import Client from '../Client/client.model'; // No longer needed for Auth migration
 
 // Individual service functions
 const savePlaidConsent = async (
@@ -78,16 +78,28 @@ const savePlaidConsent = async (
   }
 
   // Validate organization exists and is eligible
+  // organizationId is now Auth._id, validate Auth first
   console.log({ organizationId });
-  const organization = await OrganizationModel.findById(organizationId);
-  console.log(organization);
+  const organizationAuth = await Auth.findById(organizationId);
+  console.log(organizationAuth);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (!organization) {
+  if (!organizationAuth || organizationAuth.role !== 'ORGANIZATION') {
     return {
       success: false,
       message: 'Invalid organization selected',
       data: null,
       statusCode: StatusCodes.BAD_REQUEST,
+    };
+  }
+
+  // Get organization profile when needed for additional validation
+  const organization = await OrganizationModel.findOne({ auth: organizationId });
+  if (!organization) {
+    return {
+      success: false,
+      message: 'Organization profile not found',
+      data: null,
+      statusCode: StatusCodes.NOT_FOUND,
     };
   }
 
@@ -103,6 +115,7 @@ const savePlaidConsent = async (
     };
   }
 
+  // cause.organization is now Auth._id, organizationId is also Auth._id
   if (cause.organization.toString() !== organizationId) {
     return {
       success: false,
@@ -363,9 +376,9 @@ const processMonthlyDonation = async (
   try {
     await session.startTransaction();
 
-    // ✅ NEW: Get organization's Stripe Connect account
-    const organization = await OrganizationModel.findById(
-      roundUpConfig.organization
+    // ✅ NEW: Get organization's Stripe Connect account (roundUpConfig.organization is Auth._id)
+    const organization = await OrganizationModel.findOne(
+      { auth: roundUpConfig.organization }
     ).session(session);
     if (!organization) {
       await session.abortTransaction();
@@ -409,17 +422,17 @@ const processMonthlyDonation = async (
       };
     }
 
-    // ✅ Find Client by auth ID (userId is Auth._id)
-    const donor = await Client.findOne({ auth: userId }).session(session);
-    if (!donor?._id) {
-      await session.abortTransaction();
-      return {
-        success: false,
-        message: 'Donor not found!',
-        data: null,
-        statusCode: StatusCodes.NOT_FOUND,
-      };
-    }
+    // userId is already Auth._id, no need to lookup Client
+    // const donor = await Client.findOne({ auth: userId }).session(session);
+    // if (!donor?._id) {
+    //   await session.abortTransaction();
+    //   return {
+    //     success: false,
+    //     message: 'Donor not found!',
+    //     data: null,
+    //     statusCode: StatusCodes.NOT_FOUND,
+    //   };
+    // }
 
     // ✅ NEW: Generate unique donation ID
     const donationUniqueId = new Types.ObjectId();
@@ -427,7 +440,7 @@ const processMonthlyDonation = async (
     // ✅ NEW: Create Donation record FIRST with status 'pending'
     const donation = new Donation({
       _id: donationUniqueId,
-      donor: new Types.ObjectId(donor._id),
+      donor: userId, // Direct Auth._id, no need for donor._id
       organization: roundUpConfig.organization,
       cause: roundUpConfig.cause,
       donationType: 'round-up',
@@ -638,10 +651,10 @@ const switchCharity = async (
     };
   }
 
-  // Validate new organization
-  const newOrganization = await OrganizationModel.findById(newOrganizationId);
+  // Validate new organization (newOrganizationId is now Auth._id)
+  const newOrganizationAuth = await Auth.findById(newOrganizationId);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (!newOrganization) {
+  if (!newOrganizationAuth || newOrganizationAuth.role !== 'ORGANIZATION') {
     return {
       success: false,
       message: 'Invalid organization selected',
@@ -741,14 +754,12 @@ const getUserDashboard = async (userId: string) => {
     };
   }
 
-  // Get associated data
+  // Get associated data (roundUpConfig.organization is Auth._id)
   const [bankConnection, organization, cause, transactionSummary] =
     await Promise.all([
       bankConnectionService.getBankConnectionById(roundUpConfig.bankConnection),
-      OrganizationModel.findById(roundUpConfig.organization),
-      (
-        await import('../Causes/causes.model')
-      ).default.findById(roundUpConfig.cause),
+      OrganizationModel.findOne({ auth: roundUpConfig.organization }),
+      Cause.findById(roundUpConfig.cause),
       roundUpTransactionService.getTransactionSummary(userId),
     ]);
 

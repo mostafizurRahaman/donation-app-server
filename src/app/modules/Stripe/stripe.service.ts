@@ -8,7 +8,7 @@ import { OrganizationModel } from '../Organization/organization.model';
 import { Donation } from '../Donation/donation.model';
 import Cause from '../Causes/causes.model';
 import { CAUSE_STATUS_TYPE } from '../Causes/causes.constant';
-import Client from '../Client/client.model';
+// import Client from '../Client/client.model'; // No longer needed for Auth migration
 import {
   ICheckoutSessionRequest,
   ICheckoutSessionResponse,
@@ -843,16 +843,16 @@ const processRoundUpDonation = async (payload: {
       },
     });
 
-    // ✅ Find Client by auth ID (payload.userId is Auth._id)
-    const donor = await Client.findOne({ auth: payload.userId });
-    if (!donor?._id) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
-    }
+    // payload.userId is already Auth._id, no need to lookup Client
+    // const donor = await Client.findOne({ auth: payload.userId });
+    // if (!donor?._id) {
+    //   throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
+    // }
 
     // Create donation record in main donation model
     const mainDonation = await Donation.create({
-      donor: donor._id,
-      organization: payload.charityId,
+      donor: payload.userId, // Use Auth._id directly
+      organization: payload.charityId, // This should be Auth._id too
       cause: payload.causeId, // Cause specified during round-up setup
       donationType: 'round-up',
       amount: payload.amount,

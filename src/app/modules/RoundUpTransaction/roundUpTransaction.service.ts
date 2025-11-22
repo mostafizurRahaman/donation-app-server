@@ -16,7 +16,7 @@ import { Donation } from '../Donation/donation.model';
 import Cause from '../Causes/causes.model';
 import { CAUSE_STATUS_TYPE } from '../Causes/causes.constant';
 import { AppError } from '../../utils';
-import Client from '../Client/client.model';
+// import Client from '../Client/client.model'; // No longer needed for Auth migration
 import httpStatus from 'http-status';
 import { handleDuplicateError } from '../../errors';
 
@@ -101,15 +101,15 @@ const triggerDonation = async (
       );
     }
 
-    // ✅ Find Client by auth ID (roundUpConfig.user is Auth._id)
-    const donor = await Client.findOne({ auth: roundUpConfig.user });
-    if (!donor?._id) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
-    }
+    // roundUpConfig.user is already Auth._id, no need to lookup Client
+    // const donor = await Client.findOne({ auth: roundUpConfig.user });
+    // if (!donor?._id) {
+    //   throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
+    // }
 
     // STEP 1: Create Donation record with PENDING status
     const donation = await Donation.create({
-      donor: donor._id,
+      donor: roundUpConfig.user, // Use Auth._id directly
       organization: roundUpConfig.organization,
       cause: roundUpConfig.cause,
       donationType: 'round-up',

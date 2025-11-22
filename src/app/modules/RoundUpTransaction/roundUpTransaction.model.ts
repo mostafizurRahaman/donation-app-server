@@ -83,7 +83,7 @@ const RoundUpTransactionSchema = new Schema(
     organization: {
       type: Schema.Types.ObjectId,
       required: true,
-      ref: 'Organization',
+      ref: 'Auth',
       index: true,
     },
     transactionDate: {

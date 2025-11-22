@@ -5,7 +5,7 @@ import { asyncHandler, sendResponse, AppError } from '../../utils';
 import { ExtendedRequest } from '../../types';
 import { DonationService } from './donation.service';
 import { TRetryFailedPaymentParams } from './donation.validation';
-import Client from '../Client/client.model';
+// import Client from '../Client/client.model'; // No longer needed for Auth migration
 import { ROLE } from '../Auth/auth.constant';
 import { OrganizationModel } from '../Organization/organization.model';
 
@@ -125,16 +125,20 @@ const getOrganizationDonations = asyncHandler(
     const query = req.query as Record<string, unknown>;
 
     // Authorization check: Verify user owns/manages the organization
-    const Organization = (await import('../Organization/organization.model'))
-      .default;
-    const organization = await Organization.findById(organizationId);
-
-    if (!organization) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Organization not found');
+    // organizationId is now Auth._id, validate directly
+    if (organizationId !== userId) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "You do not have permission to access this organization's donations"
+      );
     }
 
-    // Check if the authenticated user is the owner of this organization
-    if (organization.auth.toString() !== userId) {
+    // Get organization profile for any additional data needed
+    const organization = await OrganizationModel.findOne({ auth: organizationId });
+
+    if (!organization) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Organization profile not found');
+    }
       throw new AppError(
         httpStatus.FORBIDDEN,
         "You do not have permission to access this organization's donations"
@@ -338,15 +342,15 @@ const getDonationStatistics = asyncHandler(
       throw new AppError(httpStatus.UNAUTHORIZED, 'User not authenticated');
     }
 
-    // Find donor by auth ID
-    const donor = await Client.findOne({ auth: userId });
-    if (!donor?._id) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
-    }
+    // userId is already Auth._id, no need to lookup Client
+    // const donor = await Client.findOne({ auth: userId });
+    // if (!donor?._id) {
+    //   throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
+    // }
 
     // Call service layer
     const stats = await DonationService.getDonationStatistics(
-      donor._id.toString()
+      userId
     );
 
     // Send standardized response
@@ -384,9 +388,7 @@ const getDonationAnalyticsController = asyncHandler(
     // If user is an ORGANIZATION, get their organization ID
     if (userRole === ROLE.ORGANIZATION) {
       // Find the organization associated with this auth user
-      const Organization = (await import('../Organization/organization.model'))
-        .default;
-      const organization = await Organization.findOne({ auth: userId });
+      const organization = await OrganizationModel.findOne({ auth: userId });
 
       if (!organization) {
         throw new AppError(

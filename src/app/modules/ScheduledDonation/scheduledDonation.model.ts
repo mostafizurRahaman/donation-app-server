@@ -23,13 +23,13 @@ const scheduledDonationSchema = new Schema<IScheduledDonationModel>(
     // User & Organization (Template Data)
     user: {
       type: Schema.Types.ObjectId,
-      ref: 'Client',
+      ref: 'Auth',
       required: [true, 'User is required'],
       index: true,
     },
     organization: {
       type: Schema.Types.ObjectId,
-      ref: 'Organization',
+      ref: 'Auth',
       required: [true, 'Organization is required'],
       index: true,
     },

@@ -23,7 +23,8 @@ import { ICheckoutSessionResponse } from '../Stripe/stripe.interface';
 import { IDonationWithTracking } from './donation.interface';
 import Organization from '../Organization/organization.model';
 import { PaymentMethodService } from '../PaymentMethod/paymentMethod.service';
-import Client from '../Client/client.model';
+import Auth from '../Auth/auth.model';
+// import Client from '../Client/client.model'; // No longer needed for Auth migration
 import QueryBuilder from '../../builders/QueryBuilder';
 import {
   buildBaseQuery,
@@ -73,14 +74,20 @@ const createOneTimeDonation = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
   }
 
-  // Validate organization exists
-  const organization = await Organization.findById(organizationId);
-  if (!organization) {
+  // Validate organization exists (organizationId is now Auth._id)
+  const organizationAuth = await Auth.findById(organizationId);
+  if (!organizationAuth || organizationAuth.role !== 'ORGANIZATION') {
     throw new AppError(httpStatus.NOT_FOUND, 'Organization not found!');
   }
 
+  // Get organization profile for Stripe Connect account
+  const organizationProfile = await Organization.findOne({ auth: organizationId });
+  if (!organizationProfile) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Organization profile not found!');
+  }
+
   // Get organization's Stripe Connect account (required for receiving payments)
-  const connectedAccountId = organization.stripeConnectAccountId;
+  const connectedAccountId = organizationProfile.stripeConnectAccountId;
   if (!connectedAccountId) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -194,8 +201,8 @@ const getDonationById = async (donationId: string): Promise<IDonation> => {
   }
 
   const donation = await Donation.findById(donationId)
-    .populate('donor', '_id name auth address state postalCode image')
-    .populate('organization', 'name')
+    .populate('donor', '_id email role')
+    .populate('organization', '_id email role')
     .populate('cause', 'name description');
 
   if (!donation) {
@@ -235,8 +242,8 @@ const updateDonationStatus = async (
     { $set: updateData },
     { new: true }
   )
-    .populate('donor', 'name email')
-    .populate('organization', 'name')
+    .populate('donor', '_id email role')
+    .populate('organization', '_id email role')
     .populate('cause', 'name description');
 
   if (!donation) {
@@ -253,8 +260,8 @@ const findDonationByPaymentIntentId = async (
   const donation = await Donation.findOne({
     stripePaymentIntentId: paymentIntentId,
   })
-    .populate('donor', 'name email')
-    .populate('organization', 'name')
+    .populate('donor', '_id email role')
+    .populate('organization', '_id email role')
     .populate('cause', 'name description');
 
   return donation ? (donation as IDonation) : null;
@@ -278,8 +285,8 @@ const updateDonationStatusByPaymentIntent = async (
     { $set: updateData },
     { new: true }
   )
-    .populate('donor', 'name email')
-    .populate('organization', 'name')
+    .populate('donor', '_id email role')
+    .populate('organization', '_id email role')
     .populate('cause', 'name description');
 };
 
@@ -293,10 +300,10 @@ const getDonationsByUser = async (
     throw new AppError(httpStatus.BAD_REQUEST, 'User ID is required!');
   }
 
-  // Find donor by auth ID
-  const donor = await Client.findOne({ auth: userId });
-  if (!donor?._id) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
+  // userId is already Auth._id, no need to lookup Client
+  // const donor = await Client.findOne({ auth: userId });
+  // if (!donor?._id) {
+  //   throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
   }
 
   try {
@@ -310,8 +317,8 @@ const getDonationsByUser = async (
     }
 
     // Create base query with only donor filter
-    const baseQuery = Donation.find({ donor: donor._id })
-      .populate('organization', 'name')
+    const baseQuery = Donation.find({ donor: userId })
+      .populate('organization', '_id email role')
       .populate('cause', 'name');
 
     // Define searchable fields for donations
@@ -355,10 +362,16 @@ const getDonationsByOrganization = async (
     throw new AppError(httpStatus.BAD_REQUEST, 'Organization ID is required!');
   }
 
-  // Validate organization exists
-  const organization = await Organization.findById(organizationId);
-  if (!organization) {
+  // Validate organization exists (organizationId is now Auth._id)
+  const organizationAuth = await Auth.findById(organizationId);
+  if (!organizationAuth || organizationAuth.role !== 'ORGANIZATION') {
     throw new AppError(httpStatus.NOT_FOUND, 'Organization not found!');
+  }
+
+  // Get organization profile
+  const organization = await Organization.findOne({ auth: organizationId });
+  if (!organization) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Organization profile not found!');
   }
 
   try {
@@ -373,7 +386,7 @@ const getDonationsByOrganization = async (
 
     // Create base query with only organization filter
     const baseQuery = Donation.find({ organization: organizationId })
-      .populate('donor')
+      .populate('donor', '_id email role')
       .populate('cause', 'name');
 
     // Define searchable fields for donations
@@ -505,8 +518,8 @@ const updateDonationPaymentStatus = async (
     { $set: updateData },
     { new: true }
   )
-    .populate('donor', 'name email')
-    .populate('organization', 'name')
+    .populate('donor', '_id email role')
+    .populate('organization', '_id email role')
     .populate('cause', 'name description')) as unknown as IDonation;
 };
 
@@ -547,8 +560,8 @@ const retryFailedPayment = async (
     );
   }
 
-  // Fetch organization for Stripe Connect account
-  const organization = await Organization.findById(donation.organization);
+  // Fetch organization for Stripe Connect account (donation.organization is now Auth._id)
+  const organization = await Organization.findOne({ auth: donation.organization });
   if (!organization?.stripeConnectAccountId) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -630,10 +643,10 @@ const cancelDonation = async (
     throw new AppError(httpStatus.BAD_REQUEST, 'Donation ID is required!');
   }
 
-  // Find donor by auth ID
-  const donor = await Client.findOne({ auth: userId });
-  if (!donor?._id) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
+  // userId is already Auth._id, no need to lookup Client
+  // const donor = await Client.findOne({ auth: userId });
+  // if (!donor?._id) {
+  //   throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
   }
 
   // Find donation
@@ -689,10 +702,10 @@ const refundDonation = async (
     throw new AppError(httpStatus.BAD_REQUEST, 'Donation ID is required!');
   }
 
-  // Find donor by auth ID
-  const donor = await Client.findOne({ auth: userId });
-  if (!donor?._id) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
+  // userId is already Auth._id, no need to lookup Client
+  // const donor = await Client.findOne({ auth: userId });
+  // if (!donor?._id) {
+  //   throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
   }
 
   // Find donation
@@ -1180,10 +1193,16 @@ const getRecentDonors = async (
 const getOrganizationCauseStats = async (
   organizationId: string
 ): Promise<IOrganizationStatsResponse> => {
-  // Verify organization exists
-  const organization = await Organization.findById(organizationId);
-  if (!organization) {
+  // Verify organization exists (organizationId is now Auth._id)
+  const organizationAuth = await Auth.findById(organizationId);
+  if (!organizationAuth || organizationAuth.role !== 'ORGANIZATION') {
     throw new AppError(httpStatus.NOT_FOUND, 'Organization not found');
+  }
+
+  // Get organization profile when needed
+  const organization = await Organization.findOne({ auth: organizationId });
+  if (!organization) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Organization profile not found');
   }
 
   // Aggregate donations by cause with cause details
@@ -1290,13 +1309,20 @@ const getOrganizationCauseMonthlyStats = async (
     );
   }
 
+  // organizationId is now Auth._id, validate Auth first
+  const organizationAuth = await Auth.findById(organizationId);
+  
   const [organization, cause] = await Promise.all([
-    Organization.findById(organizationId),
+    Organization.findOne({ auth: organizationId }),
     Cause.findById(causeId),
   ]);
 
-  if (!organization) {
+  if (!organizationAuth || organizationAuth.role !== 'ORGANIZATION') {
     throw new AppError(httpStatus.NOT_FOUND, 'Organization not found');
+  }
+
+  if (!organization) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Organization profile not found');
   }
 
   if (!cause) {

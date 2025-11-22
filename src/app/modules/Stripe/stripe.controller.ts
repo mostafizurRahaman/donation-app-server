@@ -3,6 +3,8 @@ import { Request, Response } from 'express';
 import { StripeService } from './stripe.service';
 import { StripeValidation } from './stripe.validation';
 import { asyncHandler, sendResponse, AppError } from '../../utils';
+import Auth from '../Auth/auth.model';
+import Organization from '../Organization/organization.model';
 
 // 1. Create checkout session for one-time donation
 const createCheckoutSession = asyncHandler(async (req: Request, res: Response) => {
@@ -15,12 +17,18 @@ const createCheckoutSession = asyncHandler(async (req: Request, res: Response) =
   // Extract validated body (validated by middleware)
   const { amount, causeId, organizationId, specialMessage } = req.body;
 
-  // Fetch organization to get Stripe Connect account
-  const Organization = (await import('../Organization/organization.model')).default;
-  const organization = await Organization.findById(organizationId);
+  // organizationId is now Auth._id, validate Auth first
+  const organizationAuth = await Auth.findById(organizationId);
+  
+  if (!organizationAuth || organizationAuth.role !== 'ORGANIZATION') {
+    throw new AppError(httpStatus.NOT_FOUND, 'Organization not found!');
+  }
+
+  // Get organization profile for Stripe Connect account
+  const organization = await Organization.findOne({ auth: organizationId });
   
   if (!organization) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Organization not found!');
+    throw new AppError(httpStatus.NOT_FOUND, 'Organization profile not found!');
   }
 
   const connectedAccountId = organization.stripeConnectAccountId;
