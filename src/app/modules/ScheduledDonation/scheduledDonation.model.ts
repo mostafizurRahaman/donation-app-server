@@ -20,18 +20,33 @@ import { IScheduledDonationModel } from '../Donation/donation.interface';
  */
 const scheduledDonationSchema = new Schema<IScheduledDonationModel>(
   {
-    // User & Organization (Template Data)
+    // New Auth-based fields (primary)
+    userAuth: {
+      type: Schema.Types.ObjectId,
+      ref: 'Auth',
+      required: [true, 'User Auth is required'],
+      index: true,
+    },
+    organizationAuth: {
+      type: Schema.Types.ObjectId,
+      ref: 'Auth',
+      required: [true, 'Organization Auth is required'],
+      index: true,
+    },
+
+    // @deprecated user (Client reference) - use userAuth instead
     user: {
       type: Schema.Types.ObjectId,
       ref: 'Client',
-      required: [true, 'User is required'],
-      index: true,
+      required: false, // Made optional during migration
+      select: false, // Hide by default
     },
+    // @deprecated organization (Organization reference) - use organizationAuth instead
     organization: {
       type: Schema.Types.ObjectId,
       ref: 'Organization',
-      required: [true, 'Organization is required'],
-      index: true,
+      required: false, // Made optional during migration
+      select: false, // Hide by default
     },
 
     // Donation Template (what to donate)
@@ -130,11 +145,15 @@ const scheduledDonationSchema = new Schema<IScheduledDonationModel>(
   }
 );
 
-// Compound indexes for efficient queries
-scheduledDonationSchema.index({ user: 1, isActive: 1 });
-scheduledDonationSchema.index({ organization: 1, isActive: 1 });
+// New Auth-based compound indexes (primary)
+scheduledDonationSchema.index({ userAuth: 1, isActive: 1 });
+scheduledDonationSchema.index({ organizationAuth: 1, isActive: 1 });
 scheduledDonationSchema.index({ nextDonationDate: 1, isActive: 1 }); // Critical for cron jobs
 scheduledDonationSchema.index({ stripeCustomerId: 1, isActive: 1 });
+
+// @deprecated indexes - keeping during migration
+scheduledDonationSchema.index({ user: 1, isActive: 1 });
+scheduledDonationSchema.index({ organization: 1, isActive: 1 });
 
 export const ScheduledDonation = model<IScheduledDonationModel>(
   'ScheduledDonation',

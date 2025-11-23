@@ -8,15 +8,33 @@ import {
 
 const donationSchema = new Schema<IDonationModel>(
   {
+    // New Auth-based fields (primary)
+    donorAuth: {
+      type: Schema.Types.ObjectId,
+      ref: 'Auth',
+      required: true,
+      index: true,
+    },
+    organizationAuth: {
+      type: Schema.Types.ObjectId,
+      ref: 'Auth',
+      required: true,
+      index: true,
+    },
+
+    // @deprecated donor (Client reference) - use donorAuth instead
     donor: {
       type: Schema.Types.ObjectId,
       ref: 'Client',
-      required: true,
+      required: false, // Made optional during migration
+      select: false, // Hide by default
     },
+    // @deprecated organization (Organization reference) - use organizationAuth instead
     organization: {
       type: Schema.Types.ObjectId,
       ref: 'Organization',
-      required: true,
+      required: false, // Made optional during migration
+      select: false, // Hide by default
     },
     cause: {
       type: Schema.Types.ObjectId,
@@ -120,6 +138,12 @@ const donationSchema = new Schema<IDonationModel>(
   }
 );
 
+// New Auth-based indexes (primary)
+donationSchema.index({ donorAuth: 1, donationDate: -1 });
+donationSchema.index({ organizationAuth: 1, donationDate: -1 });
+donationSchema.index({ idempotencyKey: 1, donorAuth: 1 }, { unique: true });
+
+// @deprecated indexes - keeping during migration
 donationSchema.index({ donor: 1, donationDate: -1 });
 donationSchema.index({ organization: 1, donationDate: -1 });
 donationSchema.index({ status: 1, donationDate: -1 });
