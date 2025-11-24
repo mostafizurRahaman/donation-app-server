@@ -1,8 +1,5 @@
 import z from 'zod';
-import {
-  ORGANIZATION_STATUS,
-  organizationStatusValues,
-} from './organization.constants';
+import { organizationStatusValues } from './organization.constants';
 
 // Tab 1: Organization Details (without images)
 const editProfileOrgDetailsSchema = z.object({

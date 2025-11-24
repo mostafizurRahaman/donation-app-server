@@ -1,4 +1,5 @@
 import httpStatus from 'http-status';
+import { Types, FilterQuery, Schema } from 'mongoose';
 import { AppError } from '../../utils';
 import Organization from './organization.model';
 import Auth from '../Auth/auth.model';
@@ -9,14 +10,15 @@ import {
 } from './organization.validation';
 import { ROLE } from '../Auth/auth.constant';
 import { IAuth } from '../Auth/auth.interface';
+import { IORGANIZATION } from './organization.interface';
 import fs from 'fs';
 import { createAccessToken } from '../../lib';
 import { searchableFields } from './organization.constants';
 import { AUTH_STATUS } from '../Auth/auth.constant';
 import QueryBuilder from '../../builders/QueryBuilder';
-import { is } from 'zod/v4/locales';
 import Cause from '../Causes/causes.model';
-import { DonationService } from '../Donation/donation.service';
+import { ICause } from '../Causes/causes.interface';
+import Donation from '../Donation/donation.model';
 
 /**
  * Start Stripe Connect onboarding for an organization
@@ -349,7 +351,7 @@ const getAllOrganizations = async (query: Record<string, unknown>) => {
   } = query;
 
   // Build base conditions
-  const conditions: any = {};
+  const conditions: FilterQuery<IORGANIZATION> = {};
 
   if (dateOfEstablishment) {
     conditions.dateOfEstablishment = new Date(dateOfEstablishment as string);
@@ -371,9 +373,9 @@ const getAllOrganizations = async (query: Record<string, unknown>) => {
   }
 
   // Handle status filter
-  let authIdArray: any[] = [];
+  let authIdArray: (Types.ObjectId | Schema.Types.ObjectId)[] = [];
   if (status) {
-    const authQuery: any = { role: ROLE.ORGANIZATION };
+    const authQuery: FilterQuery<IAuth> = { role: ROLE.ORGANIZATION };
 
     if (status) {
       authQuery.status = status;
@@ -407,7 +409,7 @@ const getAllOrganizations = async (query: Record<string, unknown>) => {
 
   // Populate causes after QueryBuilder execution (if requested)
   if (populateCauses === 'true' || populateCauses === true) {
-    const organizationIds = result.map((org: any) => org._id);
+    const organizationIds = result.map((org: IORGANIZATION) => org._id);
 
     // Get causes for all organizations in one query
     const causes = await Cause.find({
@@ -415,10 +417,10 @@ const getAllOrganizations = async (query: Record<string, unknown>) => {
     });
 
     // Map causes to their organizations
-    const resultWithCauses = result.map((org: any) => {
+    const resultWithCauses = result.map((org: IORGANIZATION) => {
       const orgObject = org.toObject();
       orgObject.causes = causes.filter(
-        (cause: any) => cause.organization.toString() === org._id.toString()
+        (cause: ICause) => cause.organization.toString() === org._id.toString()
       );
       return orgObject;
     });
@@ -439,25 +441,82 @@ const getAllOrganizations = async (query: Record<string, unknown>) => {
  * Get Organization Details by ID
  */
 const getOrganizationDetailsById = async (organizationId: string) => {
-  // Find organization by ID (organizationId is Profile._id, this is internal Org API)
-  const organization = await Organization.findById(organizationId)
+  const organization = await Organization.findOne({
+    auth: organizationId,
+  })
     .select(
-      'name registeredCharityName logoImage coverImage aboutUs serviceType address state postalCode website phoneNumber'
+      'name registeredCharityName logoImage coverImage aboutUs serviceType address state postalCode website phoneNumber waqfVerified zakatEligible taxDeductible isFeatured badgesLastUpdatedBy badgesLastUpdatedAt'
     )
-    .populate('auth', 'email role isActive status');
+    .populate('auth', 'email role isActive status')
+    .populate('badgesLastUpdatedBy', 'email role');
 
-  const recentDonors = await DonationService.getRecentDonors(
-    {},
-    organizationId,
-    5
-  );
-  console.log('Recent Donors:', recentDonors);
+  // Get donation statistics for all causes in one query
+  const donationStats = await Donation.aggregate([
+    {
+      $match: {
+        organization: new Types.ObjectId(organization?.auth._id),
+        status: 'completed',
+      },
+    },
+    {
+      $group: {
+        _id: '$organization',
+        totalDonationAmount: { $sum: '$amount' },
+        totalDonors: { $addToSet: '$donor' },
+        totalDonations: { $sum: 1 }, // Count total number of donations
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        totalDonationAmount: 1,
+        totalDonors: { $size: '$totalDonors' },
+        totalDonations: 1,
+      },
+    },
+  ]);
+
+  // Get recent 5 donors for each cause with user information
+  const recentDonors = await Donation.aggregate([
+    {
+      $match: {
+        organization: new Types.ObjectId(organization?.auth._id),
+        status: 'completed',
+      },
+    },
+    {
+      $lookup: {
+        from: 'clients',
+        localField: 'donor',
+        foreignField: 'auth',
+        as: 'donorInfo',
+      },
+    },
+    { $unwind: '$donorInfo' },
+    {
+      $group: {
+        _id: '$donor',
+        name: { $first: '$donorInfo.name' },
+        image: { $first: '$donorInfo.image' },
+        donationDate: { $first: '$donationDate' },
+        amount: { $first: '$amount' },
+        cause: { $first: '$cause' },
+      },
+    },
+
+    {
+      $sort: { donationDate: -1 },
+    },
+    {
+      $limit: 5,
+    },
+  ]);
 
   if (!organization) {
     throw new AppError(httpStatus.NOT_FOUND, 'Organization not found!');
   }
 
-  return { ...organization.toObject(), recentDonors };
+  return { ...organization.toObject(), recentDonors, donationStats };
 };
 
 export const OrganizationService = {

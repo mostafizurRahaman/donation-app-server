@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import config from '../config';
-import { ROLE } from '../modules/Auth/auth.constant';
+import { AUTH_STATUS, ROLE } from '../modules/Auth/auth.constant';
 import Auth from '../modules/Auth/auth.model';
 
 const adminData = {
@@ -10,6 +10,7 @@ const adminData = {
   otp: config.admin.otp,
   otpExpiry: new Date(),
   isVerifiedByOTP: true,
+  status: AUTH_STATUS.VERIFIED,
 };
 
 const seedAdmin = async () => {

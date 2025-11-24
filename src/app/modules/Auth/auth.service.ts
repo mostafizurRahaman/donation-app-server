@@ -607,10 +607,6 @@ const changePasswordIntoDB = async (
   payload: z.infer<typeof AuthValidation.changePasswordSchema.shape.body>,
   userData: IAuth
 ) => {
-  // const user = await Auth.findOne({ _id: userData._id, isActive: true }).select(
-  //   '+password'
-  // );
-
   const user = await Auth.isUserExistsByEmail(userData.email);
 
   if (!user) {
@@ -946,7 +942,6 @@ const verifyOtpForForgotPassword = async (payload: {
     throw new AppError(httpStatus.BAD_REQUEST, 'Invalid OTP!');
   }
 
-  
   // OTP verified → issue reset password token
   const resetPasswordToken = jwt.sign(
     {
@@ -968,8 +963,6 @@ const resetPasswordIntoDB = async (
   if (!resetPasswordToken) {
     throw new AppError(httpStatus.FORBIDDEN, 'Invalid reset password token!');
   }
-
-  
 
   const payload = verifyToken(resetPasswordToken, config.jwt.otpSecret!) as {
     email: string;

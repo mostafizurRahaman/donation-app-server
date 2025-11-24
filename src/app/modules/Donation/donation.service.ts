@@ -32,10 +32,10 @@ import {
   formatCurrency,
   getDateRanges,
 } from '../../lib/filter-helper';
-import { IAuth } from '../Auth/auth.interface';
 import Cause from '../Causes/causes.model';
 import { CAUSE_STATUS_TYPE } from '../Causes/causes.constant';
 import { monthAbbreviations } from './donation.constant';
+import { getUserProfile } from '../../utils/getUserProfile';
 
 // Helper function to generate unique idempotency key
 const generateIdempotencyKey = (): string => {
@@ -66,11 +66,9 @@ const createOneTimeDonation = async (
   // Generate idempotency key on backend
   const idempotencyKey = generateIdempotencyKey();
 
-  // check is donar exists ?:
-  const donor = await Client?.findOne({
-    auth: userId,
-  });
-  if (!donor?._id) {
+  // Validate donor exists (userId is now Auth._id)
+  const donorAuth = await Auth.findById(userId);
+  if (!donorAuth || donorAuth.role !== 'CLIENT') {
     throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
   }
 
@@ -81,7 +79,9 @@ const createOneTimeDonation = async (
   }
 
   // Get organization profile for Stripe Connect account
-  const organizationProfile = await Organization.findOne({ auth: organizationId });
+  const organizationProfile = await Organization.findOne({
+    auth: organizationId,
+  });
   if (!organizationProfile) {
     throw new AppError(httpStatus.NOT_FOUND, 'Organization profile not found!');
   }
@@ -134,7 +134,7 @@ const createOneTimeDonation = async (
     // Create donation record with pending status
     const donation = new Donation({
       _id: donationUniqueId,
-      donor: new Types.ObjectId(donor?._id),
+      donor: new Types.ObjectId(userId), // userId is Auth._id
       organization: new Types.ObjectId(organizationId),
       cause: new Types.ObjectId(causeId),
       donationType: 'one-time',
@@ -304,7 +304,7 @@ const getDonationsByUser = async (
   // const donor = await Client.findOne({ auth: userId });
   // if (!donor?._id) {
   //   throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
-  }
+  // }
 
   try {
     // Prepare modified query - remove 'all' values before QueryBuilder processes it
@@ -561,7 +561,9 @@ const retryFailedPayment = async (
   }
 
   // Fetch organization for Stripe Connect account (donation.organization is now Auth._id)
-  const organization = await Organization.findOne({ auth: donation.organization });
+  const organization = await Organization.findOne({
+    auth: donation.organization,
+  });
   if (!organization?.stripeConnectAccountId) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
@@ -647,7 +649,7 @@ const cancelDonation = async (
   // const donor = await Client.findOne({ auth: userId });
   // if (!donor?._id) {
   //   throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
-  }
+  // }
 
   // Find donation
   const donation = await Donation.findById(donationId);
@@ -655,8 +657,8 @@ const cancelDonation = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Donation not found!');
   }
 
-  // Verify donation belongs to user
-  if (donation.donor.toString() !== donor._id.toString()) {
+  // Verify donation belongs to user (donation.donor is now Auth._id)
+  if (donation.donor.toString() !== userId) {
     throw new AppError(
       httpStatus.FORBIDDEN,
       'You do not have permission to cancel this donation'
@@ -706,7 +708,7 @@ const refundDonation = async (
   // const donor = await Client.findOne({ auth: userId });
   // if (!donor?._id) {
   //   throw new AppError(httpStatus.NOT_FOUND, 'Donor not found!');
-  }
+  // }
 
   // Find donation
   const donation = await Donation.findById(donationId);
@@ -714,8 +716,8 @@ const refundDonation = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Donation not found!');
   }
 
-  // Verify donation belongs to user
-  if (donation.donor.toString() !== donor._id.toString()) {
+  // Verify donation belongs to user (donation.donor is now Auth._id)
+  if (donation.donor.toString() !== userId) {
     throw new AppError(
       httpStatus.FORBIDDEN,
       'You do not have permission to refund this donation'
@@ -1089,27 +1091,42 @@ const getTopDonors = async (
   );
 
   // Get donor details
-  // ✅ FIX: donorIds are Client._id values (from donation.donor field), not Auth._id
-  const donorIds = currentDonors.map((d) => d._id);
-  const clients = await Client.find({ _id: { $in: donorIds } }).populate(
-    'auth',
+  // ✅ FIX: donorIds are now Auth._id values (from donation.donor field)
+  const donorIds = currentDonors.map((d) => d._id.toString());
+
+  // Fetch Auth records for emails
+  const authRecords = await Auth.find({ _id: { $in: donorIds } }).select(
     'email'
   );
+  const authMap = new Map(authRecords.map((a) => [a._id.toString(), a.email]));
 
-  const clientMap = new Map(clients.map((c) => [c._id.toString(), c]));
+  // Resolve profiles from Auth IDs
+  const profiles = await Promise.all(
+    donorIds.map(async (authId) => {
+      try {
+        const profile = await getUserProfile(authId);
+        return { authId, profile };
+      } catch {
+        return { authId, profile: null };
+      }
+    })
+  );
+
+  const profileMap = new Map(profiles.map((p) => [p.authId, p.profile]));
 
   return currentDonors.map((donor) => {
     const donorId = donor._id.toString();
-    const client = clientMap.get(donorId);
+    const profile = profileMap.get(donorId);
     const previousAmount = previousMap.get(donorId) || 0;
     const change = calculatePercentageChange(donor.totalAmount, previousAmount);
 
+    const clientProfile = profile as { name?: string; image?: string } | null;
     return {
       donor: {
         _id: donorId,
-        name: client?.name as string,
-        email: (client?.auth as unknown as IAuth)?.email as string,
-        image: client?.image,
+        name: clientProfile?.name || '',
+        email: authMap.get(donorId) || '',
+        image: clientProfile?.image,
       },
       totalAmount: formatCurrency(donor.totalAmount),
       donationCount: donor.donationCount,
@@ -1164,25 +1181,40 @@ const getRecentDonors = async (
   console.log({ recentDonations });
 
   // Get donor details
-  // ✅ FIX: donorIds are Client._id values (from donation.donor field), not Auth._id
-  const donorIds = recentDonations.map((d) => d._id);
-  const clients = await Client.find({ _id: { $in: donorIds } }).populate(
-    'auth',
+  // ✅ FIX: donorIds are now Auth._id values (from donation.donor field)
+  const donorIds = recentDonations.map((d) => d._id.toString());
+
+  // Fetch Auth records for emails
+  const authRecords = await Auth.find({ _id: { $in: donorIds } }).select(
     'email'
   );
+  const authMap = new Map(authRecords.map((a) => [a._id.toString(), a.email]));
 
-  const clientMap = new Map(clients.map((c) => [c._id.toString(), c]));
+  // Resolve profiles from Auth IDs
+  const profiles = await Promise.all(
+    donorIds.map(async (authId) => {
+      try {
+        const profile = await getUserProfile(authId);
+        return { authId, profile };
+      } catch {
+        return { authId, profile: null };
+      }
+    })
+  );
+
+  const profileMap = new Map(profiles.map((p) => [p.authId, p.profile]));
 
   return recentDonations.map((donation) => {
     const donorId = donation._id.toString();
-    const client = clientMap.get(donorId);
+    const profile = profileMap.get(donorId);
 
+    const clientProfile = profile as { name?: string; image?: string } | null;
     return {
       donor: {
         _id: donorId,
-        name: client?.name as string,
-        email: (client?.auth as unknown as IAuth)?.email as string,
-        image: client?.image,
+        name: clientProfile?.name || '',
+        email: authMap.get(donorId) || '',
+        image: clientProfile?.image,
       },
       lastDonationDate: donation.lastDonationDate,
       lastDonationAmount: formatCurrency(donation.lastDonationAmount),
@@ -1311,7 +1343,7 @@ const getOrganizationCauseMonthlyStats = async (
 
   // organizationId is now Auth._id, validate Auth first
   const organizationAuth = await Auth.findById(organizationId);
-  
+
   const [organization, cause] = await Promise.all([
     Organization.findOne({ auth: organizationId }),
     Cause.findById(causeId),

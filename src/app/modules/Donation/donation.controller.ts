@@ -7,6 +7,7 @@ import { DonationService } from './donation.service';
 import { TRetryFailedPaymentParams } from './donation.validation';
 // import Client from '../Client/client.model'; // No longer needed for Auth migration
 import { ROLE } from '../Auth/auth.constant';
+import Auth from '../Auth/auth.model';
 import { OrganizationModel } from '../Organization/organization.model';
 
 // 1. Create one-time donation with Payment Intent
@@ -134,14 +135,14 @@ const getOrganizationDonations = asyncHandler(
     }
 
     // Get organization profile for any additional data needed
-    const organization = await OrganizationModel.findOne({ auth: organizationId });
+    const organization = await OrganizationModel.findOne({
+      auth: organizationId,
+    });
 
     if (!organization) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Organization profile not found');
-    }
       throw new AppError(
-        httpStatus.FORBIDDEN,
-        "You do not have permission to access this organization's donations"
+        httpStatus.NOT_FOUND,
+        'Organization profile not found'
       );
     }
 
@@ -219,12 +220,9 @@ const getDonationFullStatus = asyncHandler(
       throw new AppError(httpStatus.UNAUTHORIZED, 'User not authenticated');
     }
 
-    // check is donor exists :
-    const donor = await Client?.findOne({
-      auth: userId,
-    });
-
-    if (!donor?._id) {
+    // Validate donor exists (userId is now Auth._id)
+    const donorAuth = await Auth.findById(userId);
+    if (!donorAuth || donorAuth.role !== 'CLIENT') {
       throw new AppError(httpStatus.NOT_FOUND, 'Donor not found');
     }
 
@@ -246,8 +244,8 @@ const getDonationFullStatus = asyncHandler(
       );
     }
 
-    // Verify donation belongs to user
-    if (result.donation.donor._id?.toString() !== donor._id?.toString()) {
+    // Verify donation belongs to user (donation.donor is now Auth._id)
+    if (result.donation.donor._id?.toString() !== userId) {
       throw new AppError(httpStatus.FORBIDDEN, 'Access denied');
     }
 
@@ -349,9 +347,7 @@ const getDonationStatistics = asyncHandler(
     // }
 
     // Call service layer
-    const stats = await DonationService.getDonationStatistics(
-      userId
-    );
+    const stats = await DonationService.getDonationStatistics(userId);
 
     // Send standardized response
     sendResponse(res, {

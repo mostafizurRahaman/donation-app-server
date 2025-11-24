@@ -28,4 +28,13 @@ export interface IORGANIZATION extends Document {
   dateOfEstablishment: Date;
   registeredCharityName: string;
   isProfileVisible?: boolean;
+
+  waqfVerified?: boolean;
+  zakatEligible?: boolean;
+  taxDeductible?: boolean;
+
+  isFeatured?: boolean;
+
+  badgesLastUpdatedBy?: Types.ObjectId;
+  badgesLastUpdatedAt?: Date;
 }

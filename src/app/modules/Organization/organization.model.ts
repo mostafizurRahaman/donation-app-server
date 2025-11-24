@@ -95,6 +95,31 @@ const organizationSchema = new Schema<IORGANIZATION>(
       type: Boolean,
       default: true,
     },
+
+    // Badge and Verification Fields :
+    waqfVerified: {
+      type: Boolean,
+      default: false,
+    },
+    zakatEligible: {
+      type: Boolean,
+      default: false,
+    },
+    taxDeductible: {
+      type: Boolean,
+      default: false,
+    },
+    isFeatured: {
+      type: Boolean,
+      default: false,
+    },
+    badgesLastUpdatedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Auth',
+    },
+    badgesLastUpdatedAt: {
+      type: Date,
+    },
   },
   { timestamps: true, versionKey: false }
 );

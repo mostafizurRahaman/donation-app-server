@@ -11,9 +11,7 @@ import { StripeService } from '../modules/Stripe/stripe.service';
 import { RoundUpTransactionModel } from '../modules/RoundUpTransaction/roundUpTransaction.model';
 import Donation from '../modules/Donation/donation.model';
 import { IAuth } from '../modules/Auth/auth.interface';
-import Client from '../modules/Client/client.model';
-import { AppError } from '../utils';
-import httpStatus from 'http-status';
+import Auth from '../modules/Auth/auth.model';
 
 interface IPopulatedRoundUpConfig extends Omit<IRoundUpDocument, 'user'> {
   user: IAuth;
@@ -39,8 +37,6 @@ const JOB_NAME = 'roundup-transactions-main';
  * ✅ MODIFIED: Now creates Donation record BEFORE payment intent (matches threshold flow)
  */
 const processEndOfMonthDonations = async () => {
-  console.log('\n🎯 Checking for end-of-month donations to process...');
-
   // Find users with a balance from the previous month who are ready for donation
   const configsForDonation = await RoundUpModel.find<IPopulatedRoundUpConfig>({
     isActive: true,
@@ -50,12 +46,11 @@ const processEndOfMonthDonations = async () => {
   }).populate('user');
 
   if (configsForDonation.length === 0) {
-    console.log('✅ No users with pending balances for month-end processing.');
     return { processed: 0, success: 0, failed: 0 };
   }
 
   console.log(
-    `📊 Found ${configsForDonation.length} user(s) for month-end donation processing.`
+    `🎯 Processing ${configsForDonation.length} month-end donation(s)...`
   );
 
   let successCount = 0;
@@ -65,9 +60,6 @@ const processEndOfMonthDonations = async () => {
     const userId = config.user._id.toString();
     if (!userId) {
       failureCount++;
-      console.log(
-        `   ⏭️ Skipping config ${config._id}: Invalid user reference.`
-      );
       continue;
     }
 
@@ -79,10 +71,6 @@ const processEndOfMonthDonations = async () => {
       const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const monthStr = String(lastMonth.getMonth() + 1).padStart(2, '0');
       const year = lastMonth.getFullYear();
-
-      console.log(
-        `   Initiating month-end donation of $${totalAmount} for user ${userId}...`
-      );
 
       // Get all processed transactions for this round-up config for the month
       const monthTransactions = await RoundUpTransactionModel.find({
@@ -97,19 +85,13 @@ const processEndOfMonthDonations = async () => {
       });
 
       if (monthTransactions.length === 0) {
-        console.warn(
-          `   ⚠️ No transactions found for RoundUp ${config._id} in ${monthStr}/${year}`
-        );
         failureCount++;
         continue;
       }
 
-      // ✅ Find Client by auth ID (userId is Auth._id)
-      const donor = await Client.findOne({ auth: userId }).session(session);
-      if (!donor?._id) {
-        console.error(
-          `   ❌ Donor not found for user ${userId} in RoundUp ${config._id}`
-        );
+      // ✅ Validate Auth exists (userId is Auth._id)
+      const donorAuth = await Auth.findById(userId).session(session);
+      if (!donorAuth || donorAuth.role !== 'CLIENT') {
         await session.abortTransaction();
         failureCount++;
         continue;
@@ -117,7 +99,7 @@ const processEndOfMonthDonations = async () => {
 
       // STEP 1: Create Donation record with PENDING status
       const donation = await Donation.create({
-        donor: donor._id,
+        donor: userId, // userId is Auth._id
         organization: config.organization,
         cause: config.cause,
         donationType: 'round-up',
@@ -142,8 +124,6 @@ const processEndOfMonthDonations = async () => {
           transactionCount: monthTransactions.length,
         },
       });
-
-      console.log(`   ✅ Donation record created: ${donation._id}`);
 
       // STEP 2: Create Stripe PaymentIntent
       const paymentResult = await StripeService.createRoundUpPaymentIntent({
@@ -190,15 +170,15 @@ const processEndOfMonthDonations = async () => {
       );
 
       console.log(
-        `   ✅ Month-end donation initiated for RoundUp ${config._id}`
+        `   ✅ Month-end donation: $${totalAmount} for user ${userId} (${monthStr}/${year})`
       );
       successCount++;
     } catch (error) {
       await session.abortTransaction();
       failureCount++;
       console.error(
-        `❌ Error processing month-end donation for RoundUp ${config._id}:`,
-        error
+        `❌ Month-end donation failed for user ${userId}:`,
+        error instanceof Error ? error.message : error
       );
       await config.markAsFailed('Month-end donation trigger failed');
     } finally {
@@ -220,8 +200,7 @@ export const startRoundUpProcessingCron = () => {
   cronJobTracker.registerJob(JOB_NAME, schedule);
   cronJobTracker.setJobStatus(JOB_NAME, true);
 
-  console.log('🔄 RoundUp Transactions Cron Job initialized');
-  console.log(`   Schedule: ${schedule}`);
+  console.log(`🔄 RoundUp Transactions Cron Job initialized (${schedule})`);
 
   const job = cron.schedule(schedule, async () => {
     if (isProcessing) {
@@ -235,21 +214,20 @@ export const startRoundUpProcessingCron = () => {
     const startTime = Date.now();
     cronJobTracker.startExecution(JOB_NAME);
 
-    console.log('\n═══════════════════════════════════════════════════════');
-    console.log('🔄 Starting RoundUp Transaction Sync & Processing');
-    console.log(`   Time: ${new Date().toLocaleString()}`);
-    console.log('═══════════════════════════════════════════════════════');
+    console.log(
+      `\n🔄 RoundUp Processing Started - ${new Date().toLocaleString()}`
+    );
 
     try {
       // Step 1: Handle End-of-Month donations if it's the first day of the month
       const today = new Date();
       if (today.getDate() === 1) {
         const donationResults = await processEndOfMonthDonations();
-        console.log('--- Month-End Donation Summary ---');
-        console.log(
-          `   Processed: ${donationResults.processed}, Success: ${donationResults.success}, Failed: ${donationResults.failed}`
-        );
-        console.log('---------------------------------');
+        if (donationResults.processed > 0) {
+          console.log(
+            `📊 Month-End: ${donationResults.success}/${donationResults.processed} successful, ${donationResults.failed} failed`
+          );
+        }
       }
 
       // Step 2: Perform regular transaction sync for all active users
@@ -261,8 +239,6 @@ export const startRoundUpProcessingCron = () => {
         }).populate('user');
 
       if (activeRoundUpConfigs.length === 0) {
-        console.log('✅ No active round-ups to sync.');
-        // No need to continue if there are no active users.
         isProcessing = false;
         cronJobTracker.completeExecution(JOB_NAME, {
           totalProcessed: 0,
@@ -273,7 +249,7 @@ export const startRoundUpProcessingCron = () => {
       }
 
       console.log(
-        `\n📊 Found ${activeRoundUpConfigs.length} active round-up configuration(s) for transaction syncing.`
+        `📊 Syncing ${activeRoundUpConfigs.length} active round-up(s)...`
       );
 
       let successCount = 0;
@@ -282,9 +258,6 @@ export const startRoundUpProcessingCron = () => {
       for (const config of activeRoundUpConfigs) {
         // We check the status again in case the month-end job just processed this user
         if (config.status === 'processing') {
-          console.log(
-            `\n⏭️ Skipping sync for user ${config.user._id}: donation is already processing.`
-          );
           continue;
         }
 
@@ -292,16 +265,11 @@ export const startRoundUpProcessingCron = () => {
         const bankConnectionId = config.bankConnection.toString();
 
         if (!userId || !bankConnectionId) {
-          console.log(
-            `⏭️ Skipping round-up with invalid user or bank connection reference.`
-          );
           failureCount++;
           continue;
         }
 
         try {
-          console.log(`\n📝 Syncing transactions for user: ${userId}`);
-
           // A. Sync new transactions from Plaid
           const syncResult = await roundUpService.syncTransactions(
             String(userId),
@@ -312,16 +280,9 @@ export const startRoundUpProcessingCron = () => {
           const newTransactions = syncResult.data?.plaidSync?.added || [];
 
           if (newTransactions.length === 0) {
-            console.log(
-              `   No new transactions to process for user ${userId}.`
-            );
             successCount++;
             continue;
           }
-
-          console.log(
-            `   Synced ${newTransactions.length} new transaction(s).`
-          );
 
           // B. Process newly synced transactions to create round-ups
           const processingResult =
@@ -331,33 +292,31 @@ export const startRoundUpProcessingCron = () => {
               newTransactions
             );
 
-          console.log(
-            `   Processed ${processingResult.processed} round-up(s). Skipped ${processingResult.skipped}.`
-          );
-
           // C. Check if a threshold was met and donation was triggered by the service
           if (processingResult.thresholdReached) {
             console.log(
-              `   🎯 THRESHOLD MET! Donation of $${processingResult.thresholdReached.amount} was triggered for user ${userId}.`
+              `   🎯 User ${userId}: Threshold met! $${processingResult.thresholdReached.amount} donation triggered`
+            );
+          } else if (processingResult.processed > 0) {
+            console.log(
+              `   ✓ User ${userId}: ${processingResult.processed} round-up(s) processed, ${newTransactions.length} transaction(s) synced`
             );
           }
 
           successCount++;
         } catch (error) {
           failureCount++;
-          console.error(`❌ Failed to process sync for user ${userId}:`, error);
+          console.error(
+            `❌ User ${userId} sync failed:`,
+            error instanceof Error ? error.message : error
+          );
         }
       }
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-      console.log('\n═══════════════════════════════════════════════════════');
-      console.log('📊 RoundUp Sync & Processing Summary');
-      console.log('═══════════════════════════════════════════════════════');
-      console.log(`   Total Users Synced: ${activeRoundUpConfigs.length}`);
-      console.log(`   ✅ Successful Syncs: ${successCount}`);
-      console.log(`   ❌ Failed Syncs: ${failureCount}`);
-      console.log(`   ⏱️ Duration: ${duration}s`);
-      console.log('═══════════════════════════════════════════════════════\n');
+      console.log(
+        `\n📊 Summary: ${successCount}/${activeRoundUpConfigs.length} successful, ${failureCount} failed (${duration}s)`
+      );
 
       cronJobTracker.completeExecution(JOB_NAME, {
         totalProcessed: activeRoundUpConfigs.length,
@@ -380,9 +339,10 @@ export const startRoundUpProcessingCron = () => {
 };
 
 // Manual trigger function for testing
-export const manualTriggerRoundUpProcessing = async (
-  _userId?: string
-): Promise<{ success: boolean; data?: Record<string, unknown> }> => {
+export const manualTriggerRoundUpProcessing = async (): Promise<{
+  success: boolean;
+  data?: Record<string, unknown>;
+}> => {
   if (isProcessing) {
     console.log(
       '⏭️ Skipping RoundUp processing: previous run still in progress.'
@@ -397,21 +357,20 @@ export const manualTriggerRoundUpProcessing = async (
   const startTime = Date.now();
   cronJobTracker.startExecution(JOB_NAME);
 
-  console.log('\n═══════════════════════════════════════════════════════');
-  console.log('🔄 Starting RoundUp Transaction Sync & Processing');
-  console.log(`   Time: ${new Date().toLocaleString()}`);
-  console.log('═══════════════════════════════════════════════════════');
+  console.log(
+    `\n🔄 RoundUp Processing Started (Manual) - ${new Date().toLocaleString()}`
+  );
 
   try {
     // Step 1: Handle End-of-Month donations if it's the first day of the month
     const today = new Date();
     if (today.getDate() === 1) {
       const donationResults = await processEndOfMonthDonations();
-      console.log('--- Month-End Donation Summary ---');
-      console.log(
-        `   Processed: ${donationResults.processed}, Success: ${donationResults.success}, Failed: ${donationResults.failed}`
-      );
-      console.log('---------------------------------');
+      if (donationResults.processed > 0) {
+        console.log(
+          `📊 Month-End: ${donationResults.success}/${donationResults.processed} successful, ${donationResults.failed} failed`
+        );
+      }
     }
 
     // Step 2: Perform regular transaction sync for all active users
@@ -423,8 +382,6 @@ export const manualTriggerRoundUpProcessing = async (
       }).populate('user');
 
     if (activeRoundUpConfigs.length === 0) {
-      console.log('✅ No active round-ups to sync.');
-      // No need to continue if there are no active users.
       isProcessing = false;
       cronJobTracker.completeExecution(JOB_NAME, {
         totalProcessed: 0,
@@ -438,7 +395,7 @@ export const manualTriggerRoundUpProcessing = async (
     }
 
     console.log(
-      `\n📊 Found ${activeRoundUpConfigs.length} active round-up configuration(s) for transaction syncing.`
+      `📊 Syncing ${activeRoundUpConfigs.length} active round-up(s)...`
     );
 
     let successCount = 0;
@@ -447,9 +404,6 @@ export const manualTriggerRoundUpProcessing = async (
     for (const config of activeRoundUpConfigs) {
       // We check the status again in case the month-end job just processed this user
       if (config.status === 'processing') {
-        console.log(
-          `\n⏭️ Skipping sync for user ${config.user._id}: donation is already processing.`
-        );
         continue;
       }
 
@@ -457,16 +411,11 @@ export const manualTriggerRoundUpProcessing = async (
       const bankConnectionId = config.bankConnection.toString();
 
       if (!userId || !bankConnectionId) {
-        console.log(
-          `⏭️ Skipping round-up with invalid user or bank connection reference.`
-        );
         failureCount++;
         continue;
       }
 
       try {
-        console.log(`\n📝 Syncing transactions for user: ${userId}`);
-
         // A. Sync new transactions from Plaid
         const syncResult = await roundUpService.syncTransactions(
           String(userId),
@@ -477,12 +426,9 @@ export const manualTriggerRoundUpProcessing = async (
         const newTransactions = syncResult.data?.plaidSync?.added || [];
 
         if (newTransactions.length === 0) {
-          console.log(`   No new transactions to process for user ${userId}.`);
           successCount++;
           continue;
         }
-
-        console.log(`   Synced ${newTransactions.length} new transaction(s).`);
 
         // B. Process newly synced transactions to create round-ups
         const processingResult =
@@ -492,33 +438,31 @@ export const manualTriggerRoundUpProcessing = async (
             newTransactions
           );
 
-        console.log(
-          `   Processed ${processingResult.processed} round-up(s). Skipped ${processingResult.skipped}.`
-        );
-
         // C. Check if a threshold was met and donation was triggered by the service
         if (processingResult.thresholdReached) {
           console.log(
-            `   🎯 THRESHOLD MET! Donation of $${processingResult.thresholdReached.amount} was triggered for user ${userId}.`
+            `   🎯 User ${userId}: Threshold met! $${processingResult.thresholdReached.amount} donation triggered`
+          );
+        } else if (processingResult.processed > 0) {
+          console.log(
+            `   ✓ User ${userId}: ${processingResult.processed} round-up(s) processed, ${newTransactions.length} transaction(s) synced`
           );
         }
 
         successCount++;
       } catch (error) {
         failureCount++;
-        console.error(`❌ Failed to process sync for user ${userId}:`, error);
+        console.error(
+          `❌ User ${userId} sync failed:`,
+          error instanceof Error ? error.message : error
+        );
       }
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log('\n═══════════════════════════════════════════════════════');
-    console.log('📊 RoundUp Sync & Processing Summary');
-    console.log('═══════════════════════════════════════════════════════');
-    console.log(`   Total Users Synced: ${activeRoundUpConfigs.length}`);
-    console.log(`   ✅ Successful Syncs: ${successCount}`);
-    console.log(`   ❌ Failed Syncs: ${failureCount}`);
-    console.log(`   ⏱️ Duration: ${duration}s`);
-    console.log('═══════════════════════════════════════════════════════\n');
+    console.log(
+      `\n📊 Summary: ${successCount}/${activeRoundUpConfigs.length} successful, ${failureCount} failed (${duration}s)`
+    );
 
     cronJobTracker.completeExecution(JOB_NAME, {
       totalProcessed: activeRoundUpConfigs.length,
