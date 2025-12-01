@@ -6,7 +6,6 @@ export interface IDonation {
   cause: Types.ObjectId;
   donationType: 'one-time' | 'recurring' | 'round-up';
 
-  // ✅ MODIFIED: Amount fields with tax support
   amount: number; // Base amount (before tax)
   isTaxable: boolean; // Whether tax should be applied
   taxAmount: number; // Calculated tax amount
@@ -30,7 +29,6 @@ export interface IDonation {
   specialMessage?: string;
   refundReason?: string;
   pointsEarned: number;
-  connectedAccountId?: string;
 
   // Additional fields for recurring and round-up donations
   scheduledDonationId?: Types.ObjectId;

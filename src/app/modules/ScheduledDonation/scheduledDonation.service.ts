@@ -79,7 +79,7 @@ const createScheduledDonation = async (
     organizationId,
     causeId,
     amount,
-    isTaxable = false, 
+    isTaxable = false,
     frequency,
     customInterval,
     specialMessage,
@@ -168,7 +168,7 @@ const createScheduledDonation = async (
   return scheduledDonation;
 };
 
-// 2. Get user's scheduled donations with filters and pagination 
+// 2. Get user's scheduled donations with filters and pagination
 const getUserScheduledDonations = async (
   userId: string,
   query: Record<string, unknown>
@@ -223,7 +223,7 @@ const getUserScheduledDonations = async (
   };
 };
 
-// 3. Get scheduled donation by ID 
+// 3. Get scheduled donation by ID
 const getScheduledDonationById = async (
   userId: string,
   scheduledDonationId: string
@@ -330,7 +330,7 @@ const updateScheduledDonation = async (
   return scheduledDonation;
 };
 
-// 5. Pause scheduled donation 
+// 5. Pause scheduled donation
 const pauseScheduledDonation = async (
   userId: string,
   scheduledDonationId: string
@@ -355,7 +355,7 @@ const pauseScheduledDonation = async (
   return scheduledDonation;
 };
 
-// 6. Resume scheduled donation 
+// 6. Resume scheduled donation
 const resumeScheduledDonation = async (
   userId: string,
   scheduledDonationId: string
@@ -391,7 +391,7 @@ const resumeScheduledDonation = async (
   return scheduledDonation;
 };
 
-// 7. Cancel scheduled donation 
+// 7. Cancel scheduled donation
 const cancelScheduledDonation = async (
   userId: string,
   scheduledDonationId: string
@@ -411,7 +411,7 @@ const cancelScheduledDonation = async (
   }
 };
 
-// 8. Get scheduled donations due for execution 
+// 8. Get scheduled donations due for execution
 const getScheduledDonationsDueForExecution = async (): Promise<
   IScheduledDonationModel[]
 > => {
@@ -484,17 +484,6 @@ const executeScheduledDonation = async (
     );
   }
 
-  const organization =
-    scheduledDonation.organization as unknown as IORGANIZATION;
-  const connectedAccountId = organization.stripeConnectAccountId;
-
-  if (!connectedAccountId) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      `Organization "${organization.name}" has not set up payment receiving. Scheduled donation paused.`
-    );
-  }
-
   if (
     !scheduledDonation.user ||
     !scheduledDonation.organization ||
@@ -558,9 +547,8 @@ const executeScheduledDonation = async (
         off_session: boolean;
         metadata: Record<string, string>;
         description: string;
-        transfer_data: { destination: string };
       } = {
-        amount: Math.round(totalAmount * 100), 
+        amount: Math.round(totalAmount * 100),
         currency: scheduledDonation.currency.toLowerCase(),
         customer: scheduledDonation.stripeCustomerId,
         payment_method: stripePaymentMethodId,
@@ -577,11 +565,9 @@ const executeScheduledDonation = async (
           isTaxable: isTaxable.toString(),
           taxAmount: taxAmount.toString(),
           totalAmount: totalAmount.toString(),
+          payoutMode: 'manual',
         },
         description: scheduledDonation.specialMessage || 'Recurring donation',
-        transfer_data: {
-          destination: connectedAccountId,
-        },
       };
 
       const paymentIntent = await stripe.paymentIntents.create(
@@ -610,8 +596,7 @@ const executeScheduledDonation = async (
         stripeCustomerId: scheduledDonation.stripeCustomerId,
         stripePaymentMethodId: stripePaymentMethodId,
         specialMessage: scheduledDonation.specialMessage,
-        pointsEarned: 0, 
-        connectedAccountId,
+        pointsEarned: 0,
         scheduledDonationId: scheduledDonationId,
         idempotencyKey,
         paymentAttempts: attempt,
@@ -677,7 +662,6 @@ const executeScheduledDonation = async (
             stripePaymentMethodId: stripePaymentMethodId,
             specialMessage: scheduledDonation.specialMessage,
             pointsEarned: 0,
-            connectedAccountId,
             scheduledDonationId: scheduledDonationId,
             idempotencyKey: `${idempotencyKey}_failed_${attempt}`,
             paymentAttempts: attempt,
@@ -707,7 +691,7 @@ const executeScheduledDonation = async (
   );
 };
 
-// 10. Update scheduled donation after execution 
+// 10. Update scheduled donation after execution
 const updateScheduledDonationAfterExecution = async (
   scheduledDonationId: string,
   success: boolean

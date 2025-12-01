@@ -17,6 +17,8 @@ import QueryBuilder from '../../builders/QueryBuilder';
 import { is } from 'zod/v4/locales';
 import Cause from '../Causes/causes.model';
 import { DonationService } from '../Donation/donation.service';
+import { STRIPE_CONNECT_ISSUES } from '../payout/payout.constant';
+import { stripe } from '../../lib/stripeHelper';
 
 /**
  * Start Stripe Connect onboarding for an organization
@@ -460,6 +462,172 @@ const getOrganizationDetailsById = async (organizationId: string) => {
   return { ...organization.toObject(), recentDonors };
 };
 
+/**
+ * Validate organization's Stripe Connect account is ready for payouts
+ */
+const validateStripeConnectForPayouts = async (
+  organizationId: string
+): Promise<{
+  isReady: boolean;
+  accountId?: string;
+  issues: string[];
+  account?: any;
+}> => {
+  const organization = await Organization.findById(organizationId);
+
+  if (!organization) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Organization not found');
+  }
+
+  const issues: string[] = [];
+
+  // Check 1: Has Connect account
+  if (!organization.stripeConnectAccountId) {
+    issues.push(STRIPE_CONNECT_ISSUES.NO_ACCOUNT);
+    return {
+      isReady: false,
+      issues,
+    };
+  }
+
+  // Check 2: Retrieve account details from Stripe
+  let account: any;
+  try {
+    account = await stripe.accounts.retrieve(
+      organization.stripeConnectAccountId
+    );
+  } catch (error) {
+    console.error('Failed to retrieve Stripe Connect account:', error);
+    issues.push('Failed to retrieve Stripe Connect account details');
+    return {
+      isReady: false,
+      accountId: organization.stripeConnectAccountId,
+      issues,
+    };
+  }
+
+  // Check 3: Details submitted
+  if (!account.details_submitted) {
+    issues.push(STRIPE_CONNECT_ISSUES.DETAILS_NOT_SUBMITTED);
+  }
+
+  // Check 4: Charges enabled
+  if (!account.charges_enabled) {
+    issues.push(STRIPE_CONNECT_ISSUES.CHARGES_DISABLED);
+  }
+
+  // Check 5: Payouts enabled
+  if (!account.payouts_enabled) {
+    issues.push(STRIPE_CONNECT_ISSUES.PAYOUTS_DISABLED);
+  }
+
+  // Check 6: Has external account (bank or card)
+  if (
+    !account.external_accounts ||
+    account.external_accounts.data.length === 0
+  ) {
+    issues.push(STRIPE_CONNECT_ISSUES.NO_EXTERNAL_ACCOUNT);
+  }
+
+  // Check 7: Account not restricted
+  if (account.requirements?.disabled_reason) {
+    issues.push(
+      `${STRIPE_CONNECT_ISSUES.ACCOUNT_RESTRICTED}: ${account.requirements.disabled_reason}`
+    );
+  }
+
+  // Check 8: Currently due requirements
+  if (
+    account.requirements?.currently_due &&
+    account.requirements.currently_due.length > 0
+  ) {
+    issues.push(
+      `Missing requirements: ${account.requirements.currently_due.join(', ')}`
+    );
+  }
+
+  const isReady = issues.length === 0;
+
+  console.log(`Stripe Connect validation for org ${organizationId}:`);
+  console.log(`  Account ID: ${organization.stripeConnectAccountId}`);
+  console.log(`  Is Ready: ${isReady}`);
+  if (issues.length > 0) {
+    console.log(`  Issues: ${issues.join(', ')}`);
+  }
+
+  return {
+    isReady,
+    accountId: organization.stripeConnectAccountId,
+    issues,
+    account,
+  };
+};
+
+/**
+ * Get organization's payout method details (for display purposes)
+ */
+const getOrganizationPayoutMethods = async (organizationId: string) => {
+  const organization = await Organization.findById(organizationId);
+
+  if (!organization) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Organization not found');
+  }
+
+  if (!organization.stripeConnectAccountId) {
+    return {
+      hasPayoutMethod: false,
+      methods: [],
+    };
+  }
+
+  try {
+    const account = await stripe.accounts.retrieve(
+      organization.stripeConnectAccountId
+    );
+
+    console.log(account?.external_accounts?.data, { depth: Infinity });
+
+    const methods =
+      account.external_accounts?.data.map((externalAccount: any) => {
+        if (externalAccount.object === 'bank_account') {
+          return {
+            id: externalAccount.id,
+            type: 'bank_account',
+            bankName: externalAccount.bank_name,
+            last4: externalAccount.last4,
+            currency: externalAccount.currency,
+            accountHolderName: externalAccount.account_holder_name,
+            accountHolderType: externalAccount.account_holder_type,
+            country: externalAccount.country,
+          };
+        } else if (externalAccount.object === 'card') {
+          return {
+            id: externalAccount.id,
+            type: 'card',
+            brand: externalAccount.brand,
+            last4: externalAccount.last4,
+            expMonth: externalAccount.exp_month,
+            expYear: externalAccount.exp_year,
+            country: externalAccount.country,
+          };
+        }
+        return null;
+      }) || [];
+
+    return {
+      hasPayoutMethod: methods.length > 0,
+      methods: methods.filter((m: any) => m !== null),
+    };
+  } catch (error) {
+    console.error('Failed to retrieve payout methods:', error);
+    return {
+      hasPayoutMethod: false,
+      methods: [],
+      error: 'Failed to retrieve payout methods',
+    };
+  }
+};
+
 export const OrganizationService = {
   startStripeConnectOnboarding,
   getStripeConnectStatus,
@@ -469,4 +637,6 @@ export const OrganizationService = {
   editOrgTaxDetailsIntoDB,
   getAllOrganizations,
   getOrganizationDetailsById,
+  getOrganizationPayoutMethods,
+  validateStripeConnectForPayouts,
 };

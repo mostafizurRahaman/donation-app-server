@@ -14,6 +14,8 @@ import { receiptServices } from './../Receipt/receipt.service';
 import { Receipt } from '../Receipt/receipt.model';
 import { pointsServices } from '../Points/points.service';
 import { badgeService } from '../badge/badge.service';
+import Payout from '../payout/payout.model';
+import DonationPayout from '../DonationPayout/donationPayout.model';
 
 // Helper function to calculate next donation date for recurring donations
 const calculateNextDonationDate = (
@@ -373,7 +375,7 @@ const handleCheckoutSessionCompleted = async (
   }
 };
 
-// ✅ VERIFIED: handlePaymentIntentSucceeded - Already correctly handles tax
+//  handlePaymentIntentSucceeded - Already correctly handles tax
 const handlePaymentIntentSucceeded = async (
   paymentIntent: Stripe.PaymentIntent
 ) => {
@@ -763,6 +765,110 @@ const handleChargeRefunded = async (charge: Stripe.Charge) => {
   }
 };
 
+// Handle transfer.created event (manual payout completed)
+const handleTransferCreated = async (transfer: Stripe.Transfer) => {
+  try {
+    console.log(`🔔 WEBHOOK: transfer.created`);
+    console.log(`   Transfer ID: ${transfer.id}`);
+    console.log(`   Amount: $${(transfer.amount / 100).toFixed(2)}`);
+    console.log(`   Destination: ${transfer.destination}`);
+
+    const { metadata } = transfer;
+
+    // Expecting payoutId in metadata from StripeService.createManualTransfer
+    if (!metadata || !metadata.payoutId) {
+      console.log('No payoutId in transfer metadata; skipping payout update');
+      return;
+    }
+
+    const { default: Payout } = await import('../payout/payout.model');
+    const { default: DonationPayout } = await import(
+      '../DonationPayout/donationPayout.model'
+    );
+
+    // Update payout record
+    const payout = await Payout.findByIdAndUpdate(
+      metadata.payoutId,
+      {
+        stripeTransferId: transfer.id,
+        status: 'completed',
+        actualPayoutDate: new Date(),
+      },
+      { new: true }
+    );
+
+    if (!payout) {
+      console.error(
+        `❌ Payout not found for payoutId in transfer metadata: ${metadata.payoutId}`
+      );
+      return;
+    }
+
+    // Update all DonationPayout records linked to this payout
+    await DonationPayout.updateMany(
+      { payout: payout._id },
+      {
+        status: 'paid',
+        paidAt: new Date(),
+        stripeTransferId: transfer.id,
+      }
+    );
+
+    console.log(`✅ Payout ${payout._id} marked as completed`);
+    console.log(`   Donations in this payout marked as paid`);
+  } catch (error) {
+    console.error('❌ Error handling transfer.created webhook:', error);
+  }
+};
+
+// Handle transfer.failed event (payout transfer failed)
+const handleTransferFailed = async (transfer: Stripe.Transfer) => {
+  try {
+    console.log(`🔔 WEBHOOK: transfer.failed`);
+    console.log(`   Transfer ID: ${transfer.id}`);
+    console.log(`   Amount: $${(transfer.amount / 100).toFixed(2)}`);
+    console.log(`   Destination: ${transfer.destination}`);
+
+    const { metadata } = transfer;
+
+    if (!metadata || !metadata.payoutId) {
+      console.log('No payoutId in transfer metadata; skipping payout update');
+      return;
+    }
+
+    // Mark payout as failed
+    const payout = await Payout.findByIdAndUpdate(
+      metadata.payoutId,
+      {
+        status: 'failed',
+      },
+      { new: true }
+    );
+
+    if (!payout) {
+      console.error(
+        `❌ Payout not found for payoutId in transfer metadata: ${metadata.payoutId}`
+      );
+      return;
+    }
+
+    // Mark all related DonationPayout records as failed (or revert to scheduled if you prefer)
+    await DonationPayout.updateMany(
+      { payout: payout._id },
+      {
+        status: 'failed',
+      }
+    );
+
+    console.log(`⚠️ Payout ${payout._id} marked as failed`);
+    console.log(
+      `   DonationPayout records also marked as failed (org will need to re-request payout)`
+    );
+  } catch (error) {
+    console.error('❌ Error handling transfer.failed webhook:', error);
+  }
+};
+
 // Main Stripe webhook handler
 const handleStripeWebhook = async (
   req: ExtendedRequest,
@@ -793,6 +899,20 @@ const handleStripeWebhook = async (
         await handleCheckoutSessionCompleted(
           event.data.object as Stripe.Checkout.Session
         );
+        break;
+
+      case 'transfer.created':
+        await handleTransferCreated(event.data.object as Stripe.Transfer);
+        break;
+
+      case 'transfer.reversed':
+        await handleTransferFailed(event.data.object as Stripe.Transfer);
+        break;
+      case 'transfer.updated':
+        const updatedTransfer = event.data.object as Stripe.Transfer;
+        if (updatedTransfer.reversed) {
+          await handleTransferFailed(updatedTransfer);
+        }
         break;
 
       case 'payment_intent.succeeded':

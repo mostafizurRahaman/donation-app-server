@@ -68,5 +68,18 @@ router.post(
   OrganizationController.refreshStripeConnectOnboarding
 );
 
+// Check if organization can request payouts
+router.get(
+  '/payout/readiness',
+  auth(ROLE.ORGANIZATION),
+  OrganizationController.checkPayoutReadiness
+);
+
+// Get organization's linked payout methods (bank/card)
+router.get(
+  '/payout/methods',
+  auth(ROLE.ORGANIZATION),
+  OrganizationController.getPayoutMethods
+);
+
 export const OrganizationRoutes = router;
- 
