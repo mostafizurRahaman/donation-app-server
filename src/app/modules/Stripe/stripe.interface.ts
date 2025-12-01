@@ -16,7 +16,7 @@ export interface ICheckoutSessionResponse {
 }
 
 export interface IPaymentIntentRequest {
-  amount: number; 
+  amount: number;
   currency?: string;
   donorId: string;
   organizationId: string;
@@ -24,10 +24,9 @@ export interface IPaymentIntentRequest {
   connectedAccountId?: string;
   specialMessage?: string;
 
-
   isTaxable?: boolean;
   taxAmount?: number;
-  totalAmount: number; 
+  totalAmount: number;
 }
 
 export interface IPaymentIntentResponse {
@@ -66,20 +65,18 @@ export interface IAttachPaymentMethodRequest {
 }
 
 export interface ICreatePaymentIntentWithMethodRequest {
-  amount: number; 
+  amount: number;
   currency?: string;
   customerId: string;
   paymentMethodId: string;
   donationId: string;
   organizationId: string;
   causeId: string;
-  connectedAccountId?: string;
   specialMessage?: string;
-
 
   isTaxable?: boolean;
   taxAmount?: number;
-  totalAmount: number; 
+  totalAmount: number;
 }
 
 //  Interface for RoundUp payment intent
@@ -88,15 +85,35 @@ export interface ICreateRoundUpPaymentIntentRequest {
   userId: string;
   charityId: string;
   causeId?: string;
-  amount: number; 
+  amount: number;
   month: string;
   year: number;
   specialMessage?: string;
   paymentMethodId?: string;
   donationId?: string;
 
- 
   isTaxable?: boolean;
   taxAmount?: number;
-  totalAmount: number; 
+  totalAmount: number;
+}
+
+/**
+ * Manual transfer request interface
+ */
+export interface IManualTransferRequest {
+  amount: number;
+  destinationAccountId: string;
+  metadata: Record<string, string>;
+}
+
+/**
+ * Manual transfer response interface
+ */
+export interface IManualTransferResponse {
+  transferId: string;
+  amount: number;
+  currency: string;
+  destination: string;
+  status: string;
+  created: number;
 }

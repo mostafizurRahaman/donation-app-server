@@ -37,7 +37,7 @@ const JOB_NAME = 'roundup-transactions-main';
  * but haven't met their threshold, or have "no-limit" set.
  * This should only run on the first day of a new month.
  *
- * ✅ MODIFIED: Now creates Donation record BEFORE payment intent (matches threshold flow)
+ *  Now creates Donation record BEFORE payment intent (matches threshold flow)
  */
 const processEndOfMonthDonations = async () => {
   console.log('\n🎯 Checking for end-of-month donations to process...');
@@ -77,10 +77,13 @@ const processEndOfMonthDonations = async () => {
     try {
       const totalAmount = config.currentMonthTotal;
       const isTaxable = config.isTaxable || false; // Get tax setting from config
-      
+
       // Calculate tax
-      const { taxAmount, totalAmount: donationTotalAmount } = calculateTax(totalAmount, isTaxable);
-      
+      const { taxAmount, totalAmount: donationTotalAmount } = calculateTax(
+        totalAmount,
+        isTaxable
+      );
+
       const now = new Date();
       const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const monthStr = String(lastMonth.getMonth() + 1).padStart(2, '0');
@@ -135,7 +138,7 @@ const processEndOfMonthDonations = async () => {
         taxAmount,
         totalAmount: donationTotalAmount,
         currency: 'USD',
-        status: 'pending', // ⭐ Start with PENDING
+        status: 'pending',
         donationDate: new Date(),
         specialMessage:
           config.specialMessage ||
@@ -150,7 +153,7 @@ const processEndOfMonthDonations = async () => {
           month: `${year}-${monthStr}`,
           year: year.toString(),
           type: 'roundup_donation',
-          isMonthEnd: true, // ⭐ Flag for month-end donation
+          isMonthEnd: true,
           transactionCount: monthTransactions.length,
         },
       });
@@ -170,7 +173,7 @@ const processEndOfMonthDonations = async () => {
         month: `${year}-${monthStr}`,
         year: year,
         specialMessage: `Automatic monthly round-up for ${monthStr}/${year}`,
-        donationId: String(donation._id), // ⭐ Include donationId
+        donationId: String(donation._id),
       });
 
       // STEP 3: Update Donation to PROCESSING
@@ -276,7 +279,7 @@ export const startRoundUpProcessingCron = () => {
         }).populate('user');
 
       if (activeRoundUpConfigs.length === 0) {
-        console.log('✅ No active round-ups to sync.');
+        console.log('No active round-ups to sync.');
         // No need to continue if there are no active users.
         isProcessing = false;
         cronJobTracker.completeExecution(JOB_NAME, {

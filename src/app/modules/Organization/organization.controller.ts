@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { asyncHandler, sendResponse, AppError } from '../../utils';
 import { ExtendedRequest } from '../../types';
 import { OrganizationService } from './organization.service';
+import Organization from './organization.model';
 
 /**
  * Start Stripe Connect onboarding
@@ -162,6 +163,92 @@ const getOrganizationDetails = asyncHandler(
   }
 );
 
+/**
+ * Check if organization can request payouts
+ * GET /api/organization/payout/readiness
+ */
+const checkPayoutReadiness = asyncHandler(
+  async (req: ExtendedRequest, res: Response) => {
+    const userId = req.user?._id.toString();
+    if (!userId) {
+      throw new AppError(httpStatus.UNAUTHORIZED, 'User not authenticated');
+    }
+
+    const organization = await Organization.findOne({ auth: userId });
+    if (!organization) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Organization not found');
+    }
+
+    const validation =
+      await OrganizationService.validateStripeConnectForPayouts(
+        organization._id.toString()
+      );
+
+    const payoutMethods =
+      await OrganizationService.getOrganizationPayoutMethods(
+        organization._id.toString()
+      );
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      message: validation.isReady
+        ? 'Organization is ready to request payouts'
+        : 'Organization cannot request payouts yet',
+      data: {
+        isReady: validation.isReady,
+        hasConnectAccount: !!validation.accountId,
+        issues: validation.issues,
+        accountStatus: validation.account
+          ? {
+              chargesEnabled: validation.account.charges_enabled,
+              payoutsEnabled: validation.account.payouts_enabled,
+              detailsSubmitted: validation.account.details_submitted,
+              hasPayoutMethod: payoutMethods.hasPayoutMethod,
+              payoutMethods: payoutMethods.methods,
+              requirements: {
+                currentlyDue:
+                  validation.account.requirements?.currently_due || [],
+                eventuallyDue:
+                  validation.account.requirements?.eventually_due || [],
+                pastDue: validation.account.requirements?.past_due || [],
+                disabledReason:
+                  validation.account.requirements?.disabled_reason,
+              },
+            }
+          : null,
+      },
+    });
+  }
+);
+
+/**
+ * Get organization payout methods
+ * GET /api/organization/payout/methods
+ */
+const getPayoutMethods = asyncHandler(
+  async (req: ExtendedRequest, res: Response) => {
+    const userId = req.user?._id.toString();
+    if (!userId) {
+      throw new AppError(httpStatus.UNAUTHORIZED, 'User not authenticated');
+    }
+
+    const organization = await Organization.findOne({ auth: userId });
+    if (!organization) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Organization not found');
+    }
+
+    const result = await OrganizationService.getOrganizationPayoutMethods(
+      organization._id.toString()
+    );
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      message: 'Payout methods retrieved successfully',
+      data: result,
+    });
+  }
+);
+
 export const OrganizationController = {
   startStripeConnectOnboarding,
   getStripeConnectStatus,
@@ -171,4 +258,6 @@ export const OrganizationController = {
   updateLogoImage,
   getAllOrganization,
   getOrganizationDetails,
+  getPayoutMethods,
+  checkPayoutReadiness,
 };

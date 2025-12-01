@@ -90,15 +90,6 @@ const createOneTimeDonation = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Organization not found!');
   }
 
-  // Get organization's Stripe Connect account (required for receiving payments)
-  const connectedAccountId = organization.stripeConnectAccountId;
-  if (!connectedAccountId) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      'This organization has not set up payment receiving. Please contact the organization to complete their Stripe Connect onboarding.'
-    );
-  }
-
   // Validate causeId is provided
   if (!causeId || causeId.trim() === '') {
     throw new AppError(httpStatus.BAD_REQUEST, 'Cause ID is required!');
@@ -135,7 +126,7 @@ const createOneTimeDonation = async (
     // Generate unique ID for the donation
     const donationUniqueId = new Types.ObjectId();
 
-    // ✅ MODIFIED: Create donation record with tax fields
+    // Create donation record with tax fields
     const donation = new Donation({
       _id: donationUniqueId,
       donor: new Types.ObjectId(donor?._id),
@@ -151,7 +142,6 @@ const createOneTimeDonation = async (
       status: 'pending',
       specialMessage,
       pointsEarned: Math.floor(amount * 100), // ✅ Points based on base amount, NOT total
-      connectedAccountId,
       stripeCustomerId: paymentMethod.stripeCustomerId,
       stripePaymentMethodId: paymentMethod.stripePaymentMethodId,
       idempotencyKey,
@@ -173,7 +163,6 @@ const createOneTimeDonation = async (
       donationId: donationUniqueId.toString(),
       organizationId,
       causeId,
-      connectedAccountId,
       specialMessage,
     });
 
@@ -587,11 +576,8 @@ const retryFailedPayment = async (
 
   // Fetch organization for Stripe Connect account
   const organization = await Organization.findById(donation.organization);
-  if (!organization?.stripeConnectAccountId) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      'Organization payment setup not found'
-    );
+  if (!organization) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Organization not found!');
   }
 
   // Create a new payment intent for retry
@@ -606,7 +592,7 @@ const retryFailedPayment = async (
     donationId: String(donation._id),
     organizationId: donation.organization.toString(),
     causeId: donation.cause?.toString() || '',
-    connectedAccountId: organization.stripeConnectAccountId,
+
     specialMessage: donation.specialMessage,
   });
 
